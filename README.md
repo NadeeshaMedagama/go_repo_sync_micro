@@ -1,9 +1,9 @@
 # RepoSync - Go Microservices Edition
 
-[![CI/CD](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/ci-cd.yml)
-[![Docker Build & Test](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/docker-build-test.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/docker-build-test.yml)
-[![CodeQL](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/codeql-analysis.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nadeeshame/Go_RepoSync_Micro)](https://goreportcard.com/report/github.com/nadeeshame/Go_RepoSync_Micro)
+[![CI/CD](https://github.com/nadeeshame/go_repo_sync_micro/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/ci-cd.yml)
+[![Docker Build & Test](https://github.com/nadeeshame/go_repo_sync_micro/actions/workflows/docker-build-test.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/docker-build-test.yml)
+[![CodeQL](https://github.com/nadeeshame/go_repo_sync_micro/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/codeql-analysis.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nadeeshame/go_repo_sync_micro)](https://goreportcard.com/report/github.com/nadeeshame/Go_RepoSync_Micro)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A robust, enterprise-grade microservices system built in Go for automatically synchronizing GitHub repositories with Pinecone vector databases for RAG (Retrieval-Augmented Generation) applications. Built with **SOLID principles** and designed for scalability and maintainability.
