@@ -223,11 +223,11 @@ func (p *DocumentProcessor) handleChunk(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (p *DocumentProcessor) handleHealth(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":         "healthy",
 		"max_chunk_size": fmt.Sprintf("%d", p.maxChunkSize),
 		"chunk_overlap":  fmt.Sprintf("%d", p.chunkOverlap),
