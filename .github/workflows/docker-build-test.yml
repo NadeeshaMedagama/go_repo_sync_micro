@@ -1,0 +1,357 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'services/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - '.github/workflows/docker-build-test.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'services/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/go-reposync-micro
+
+jobs:
+  # Job 1: Build and test individual service Docker images
+  build-services:
+    name: Build Service Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - orchestrator
+          - metadata
+          - github-discovery
+          - document-processor
+          - embedding
+          - vector-storage
+          - notification
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./services/${{ matrix.service }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          build-args: |
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.service }}.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
+          category: trivy-${{ matrix.service }}
+        continue-on-error: true
+
+  # Job 2: Integration test with docker-compose
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: build-services
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create test environment
+        run: |
+          mkdir -p data logs
+          
+          # Create a minimal .env for testing
+          cat > .env << EOF
+          # Test configuration (using mock/test values)
+          AZURE_OPENAI_API_KEY=test-key-$(openssl rand -hex 16)
+          AZURE_OPENAI_ENDPOINT=https://test.openai.azure.com/
+          AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=test-embedding
+          AZURE_OPENAI_API_VERSION=2023-05-15
+          
+          GH_TOKEN=ghp_test_$(openssl rand -hex 16)
+          GH_ORGANIZATION=test-org
+          GH_FILTER_KEYWORD=test
+          
+          PINECONE_API_KEY=test-pinecone-$(openssl rand -hex 16)
+          PINECONE_INDEX_NAME=test-index
+          PINECONE_DIMENSION=1536
+          
+          SLACK_WEBHOOK_URL=https://hooks.slack.com/services/TEST/WEBHOOK
+          
+          LOG_LEVEL=DEBUG
+          LOG_FILE_PATH=./logs/reposync.log
+          METADATA_DB_PATH=./data/test-metadata.db
+          EOF
+
+      - name: Build all services
+        run: |
+          docker-compose build --parallel
+
+      - name: Start services
+        run: |
+          docker-compose up -d
+          echo "Waiting for services to start..."
+          sleep 30
+
+      - name: Check service health
+        run: |
+          echo "Checking Orchestrator..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/health > /dev/null 2>&1; then
+              echo "✓ Orchestrator is healthy"
+              break
+            fi
+            echo "Waiting for orchestrator... ($i/30)"
+            sleep 2
+          done
+          
+          echo "Checking all services..."
+          services=(8080 8081 8082 8083 8084 8085 8086)
+          service_names=("Orchestrator" "GitHub" "Document" "Embedding" "Vector" "Notification" "Metadata")
+          
+          for i in "${!services[@]}"; do
+            port="${services[$i]}"
+            name="${service_names[$i]}"
+            
+            if curl -f "http://localhost:$port/health" > /dev/null 2>&1; then
+              echo "✓ $name service (port $port) is healthy"
+            else
+              echo "✗ $name service (port $port) is not responding"
+              docker-compose logs "${name,,}"
+              exit 1
+            fi
+          done
+
+      - name: Test API endpoints
+        run: |
+          echo "Testing orchestrator endpoints..."
+          
+          # Test health endpoint
+          curl -f http://localhost:8080/health || exit 1
+          
+          # Note: Actual sync test would require real credentials
+          # This is a smoke test to verify services are running
+
+      - name: View service logs
+        if: always()
+        run: |
+          echo "=== Orchestrator Logs ==="
+          docker-compose logs orchestrator | tail -50
+          
+          echo "=== Metadata Logs ==="
+          docker-compose logs metadata | tail -50
+          
+          echo "=== GitHub Discovery Logs ==="
+          docker-compose logs github-discovery | tail -50
+
+      - name: Stop services
+        if: always()
+        run: |
+          docker-compose down -v
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-logs
+          path: logs/
+          retention-days: 7
+
+  # Job 3: Multi-platform build (optional, for releases)
+  build-multiplatform:
+    name: Multi-platform Build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: integration-test
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - orchestrator
+          - metadata
+          - github-discovery
+          - document-processor
+          - embedding
+          - vector-storage
+          - notification
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-platform ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./services/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}-multi
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-multi
+
+  # Job 4: Docker Compose validation
+  validate-compose:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: |
+          docker-compose config > /dev/null
+          echo "✓ docker-compose.yml is valid"
+
+      - name: Check for security issues in Dockerfiles
+        run: |
+          echo "Checking Dockerfiles for best practices..."
+          
+          for service in orchestrator metadata github-discovery document-processor embedding vector-storage notification; do
+            dockerfile="services/$service/Dockerfile"
+            echo "Checking $dockerfile..."
+            
+            # Check for COPY . . (should use specific paths)
+            if grep -q "COPY \. \." "$dockerfile" 2>/dev/null; then
+              echo "⚠️  Warning: $dockerfile uses 'COPY . .' - consider being more specific"
+            fi
+            
+            # Check for latest tag
+            if grep -q "FROM.*:latest" "$dockerfile" 2>/dev/null; then
+              echo "⚠️  Warning: $dockerfile uses :latest tag - consider pinning versions"
+            fi
+            
+            echo "✓ $dockerfile checked"
+          done
+
+  # Job 5: Generate SBOM (Software Bill of Materials)
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: build-services
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM for Go modules
+        run: |
+          go install github.com/anchore/syft/cmd/syft@latest
+          syft packages . -o spdx-json > sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 90
+
+  # Job 6: Summary and notification
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-services, integration-test]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Docker Build and Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ needs.build-services.result }} / ${{ needs.integration-test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Services Built:" >> $GITHUB_STEP_SUMMARY
+          echo "- Orchestrator" >> $GITHUB_STEP_SUMMARY
+          echo "- Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub Discovery" >> $GITHUB_STEP_SUMMARY
+          echo "- Document Processor" >> $GITHUB_STEP_SUMMARY
+          echo "- Embedding" >> $GITHUB_STEP_SUMMARY
+          echo "- Vector Storage" >> $GITHUB_STEP_SUMMARY
+          echo "- Notification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
