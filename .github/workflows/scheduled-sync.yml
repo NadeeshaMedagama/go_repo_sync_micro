@@ -1,0 +1,200 @@
+name: Scheduled Sync
+
+on:
+  schedule:
+    # Run daily at 8:00 AM UTC
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      incremental:
+        description: 'Run incremental sync (only changed files)'
+        required: false
+        default: 'true'
+        type: boolean
+      project_id:
+        description: 'Project ID to sync (default: all projects)'
+        required: false
+        default: 'default'
+        type: string
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Create directories
+        run: |
+          mkdir -p data logs
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build services
+        run: |
+          go build -o bin/orchestrator ./services/orchestrator
+          go build -o bin/metadata ./services/metadata
+          go build -o bin/github-discovery ./services/github-discovery
+          go build -o bin/document-processor ./services/document-processor
+          go build -o bin/embedding ./services/embedding
+          go build -o bin/vector-storage ./services/vector-storage
+          go build -o bin/notification ./services/notification
+
+      - name: Start metadata service
+        run: |
+          ./bin/metadata &
+          sleep 5
+        env:
+          METADATA_DB_PATH: ./data/metadata.db
+          LOG_LEVEL: INFO
+          LOG_FILE_PATH: ./logs/metadata.log
+          METADATA_SERVICE_PORT: 8086
+
+      - name: Start GitHub discovery service
+        run: |
+          ./bin/github-discovery &
+          sleep 3
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
+          GH_FILTER_KEYWORD: ${{ secrets.GH_FILTER_KEYWORD }}
+          LOG_LEVEL: INFO
+          LOG_FILE_PATH: ./logs/github.log
+          GITHUB_SERVICE_PORT: 8081
+
+      - name: Start document processor service
+        run: |
+          ./bin/document-processor &
+          sleep 3
+        env:
+          MAX_CHUNK_SIZE: 1000
+          CHUNK_OVERLAP: 200
+          LOG_LEVEL: INFO
+          LOG_FILE_PATH: ./logs/document-processor.log
+          DOCUMENT_PROCESSOR_PORT: 8082
+
+      - name: Start embedding service
+        run: |
+          ./bin/embedding &
+          sleep 3
+        env:
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          LOG_LEVEL: INFO
+          LOG_FILE_PATH: ./logs/embedding.log
+          EMBEDDING_SERVICE_PORT: 8083
+
+      - name: Start vector storage service
+        run: |
+          ./bin/vector-storage &
+          sleep 3
+        env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
+          PINECONE_DIMENSION: 1536
+          LOG_LEVEL: INFO
+          LOG_FILE_PATH: ./logs/vector-storage.log
+          VECTOR_STORAGE_PORT: 8084
+
+      - name: Start notification service
+        run: |
+          ./bin/notification &
+          sleep 3
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          LOG_LEVEL: INFO
+          LOG_FILE_PATH: ./logs/notification.log
+          NOTIFICATION_SERVICE_PORT: 8085
+
+      - name: Start orchestrator service
+        run: |
+          ./bin/orchestrator &
+          sleep 5
+        env:
+          GITHUB_SERVICE_URL: http://localhost:8081
+          DOCUMENT_PROCESSOR_URL: http://localhost:8082
+          EMBEDDING_SERVICE_URL: http://localhost:8083
+          VECTOR_STORAGE_URL: http://localhost:8084
+          NOTIFICATION_SERVICE_URL: http://localhost:8085
+          METADATA_SERVICE_URL: http://localhost:8086
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
+          GH_FILTER_KEYWORD: ${{ secrets.GH_FILTER_KEYWORD }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
+          LOG_LEVEL: INFO
+          LOG_FILE_PATH: ./logs/orchestrator.log
+          ORCHESTRATOR_PORT: 8080
+
+      - name: Wait for services to be healthy
+        run: |
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Orchestrator is healthy"
+              break
+            fi
+            echo "Waiting for orchestrator to be healthy..."
+            sleep 2
+          done
+
+      - name: Trigger sync
+        run: |
+          INCREMENTAL="${{ github.event.inputs.incremental || 'true' }}"
+          PROJECT_ID="${{ github.event.inputs.project_id || 'default' }}"
+          
+          echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID)"
+          
+          curl -X POST "http://localhost:8080/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
+            -H "Content-Type: application/json" \
+            -o sync-result.json \
+            -w "\nHTTP Status: %{http_code}\n"
+          
+          cat sync-result.json | jq '.'
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: sync-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 30
+
+      - name: Upload sync result
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: sync-result-${{ github.run_number }}
+          path: sync-result.json
+          retention-days: 30
+
+      - name: Check sync result
+        run: |
+          SUCCESS=$(cat sync-result.json | jq -r '.success')
+          if [ "$SUCCESS" != "true" ]; then
+            echo "Sync failed!"
+            cat sync-result.json | jq '.errors'
+            exit 1
+          fi
+          echo "Sync completed successfully!"
