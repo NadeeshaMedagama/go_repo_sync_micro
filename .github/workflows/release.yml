@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker images
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          
+          VERSION=${GITHUB_REF#refs/tags/}
+          
+          # Build and push all services
+          for service in orchestrator metadata github-discovery document-processor embedding vector-storage notification; do
+            docker build -t ${{ secrets.DOCKER_USERNAME }}/reposync-$service:$VERSION \
+                         -t ${{ secrets.DOCKER_USERNAME }}/reposync-$service:latest \
+                         -f services/$service/Dockerfile .
+            docker push ${{ secrets.DOCKER_USERNAME }}/reposync-$service:$VERSION
+            docker push ${{ secrets.DOCKER_USERNAME }}/reposync-$service:latest
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
