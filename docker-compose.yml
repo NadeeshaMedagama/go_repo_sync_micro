@@ -1,0 +1,241 @@
+
+services:
+  metadata:
+    build:
+      context: .
+      dockerfile: services/metadata/Dockerfile
+    container_name: reposync-metadata
+    ports:
+      - "9086:9086"
+    environment:
+      - METADATA_DB_PATH=/data/metadata.db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE_PATH=/logs/metadata.log
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - reposync-network
+
+  github-discovery:
+    build:
+      context: .
+      dockerfile: services/github-discovery/Dockerfile
+    container_name: reposync-github
+    ports:
+      - "9081:9081"
+    environment:
+      - GH_TOKEN=${GH_TOKEN}
+      - GH_ORGANIZATION=${GH_ORGANIZATION}
+      - GH_FILTER_KEYWORD=${GH_FILTER_KEYWORD}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE_PATH=/logs/github.log
+    volumes:
+      - ./logs:/logs
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - reposync-network
+
+  document-processor:
+    build:
+      context: .
+      dockerfile: services/document-processor/Dockerfile
+    container_name: reposync-document-processor
+    ports:
+      - "9082:9082"
+    environment:
+      - MAX_CHUNK_SIZE=${MAX_CHUNK_SIZE:-1000}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE_PATH=/logs/document-processor.log
+    volumes:
+      - ./logs:/logs
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - reposync-network
+
+  embedding:
+    build:
+      context: .
+      dockerfile: services/embedding/Dockerfile
+    container_name: reposync-embedding
+    ports:
+      - "9083:9083"
+    environment:
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=${AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE_PATH=/logs/embedding.log
+    volumes:
+      - ./logs:/logs
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9083/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+    networks:
+      - reposync-network
+
+  vector-storage:
+    build:
+      context: .
+      dockerfile: services/vector-storage/Dockerfile
+    container_name: reposync-vector-storage
+    ports:
+      - "9084:9084"
+    environment:
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME}
+      - PINECONE_DIMENSION=${PINECONE_DIMENSION:-1536}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE_PATH=/logs/vector-storage.log
+    volumes:
+      - ./logs:/logs
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - reposync-network
+
+  notification:
+    build:
+      context: .
+      dockerfile: services/notification/Dockerfile
+    container_name: reposync-notification
+    ports:
+      - "9085:9085"
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE_PATH=/logs/notification.log
+    volumes:
+      - ./logs:/logs
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - reposync-network
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: services/orchestrator/Dockerfile
+    container_name: reposync-orchestrator
+    ports:
+      - "9090:9090"
+    environment:
+      - GITHUB_SERVICE_URL=http://github-discovery:9081
+      - DOCUMENT_PROCESSOR_URL=http://document-processor:9082
+      - EMBEDDING_SERVICE_URL=http://embedding:9083
+      - VECTOR_STORAGE_URL=http://vector-storage:9084
+      - NOTIFICATION_SERVICE_URL=http://notification:9085
+      - METADATA_SERVICE_URL=http://metadata:9086
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE_PATH=/logs/orchestrator.log
+    volumes:
+      - ./logs:/logs
+      - ./data:/data
+    env_file:
+      - .env
+    depends_on:
+      - metadata
+      - github-discovery
+      - document-processor
+      - embedding
+      - vector-storage
+      - notification
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - reposync-network
+
+  # Auto-sync service: Automatically triggers sync when orchestrator is ready
+  auto-sync:
+    image: curlimages/curl:latest
+    container_name: reposync-auto-sync
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo '⏳ Waiting 10 seconds for all services to stabilize...';
+        sleep 10;
+        echo '🚀 Starting automatic sync...';
+        echo '📊 Configuration:';
+        echo '   - Mode: ${SYNC_MODE:-incremental}';
+        echo '   - Project: ${PROJECT_ID:-default}';
+        echo '';
+        
+        RESPONSE=$$(curl -X POST 'http://orchestrator:9090/sync?project_id=${PROJECT_ID:-default}&incremental=${SYNC_INCREMENTAL:-true}' \
+          -H 'Content-Type: application/json' \
+          -w '\n%{http_code}' \
+          -s);
+        
+        HTTP_CODE=$$(echo \"$$RESPONSE\" | tail -n1);
+        BODY=$$(echo \"$$RESPONSE\" | sed '$$d');
+        
+        echo '';
+        echo '📋 Sync Response:';
+        echo \"$$BODY\" | head -c 2000;
+        echo '';
+        echo '';
+        
+        if [ \"$$HTTP_CODE\" -eq 200 ]; then
+          echo '✅ Sync completed successfully!';
+          echo '';
+          echo '📈 Summary:';
+          echo \"$$BODY\" | grep -E '(repositories_scanned|files_processed|embeddings_generated|success)' || true;
+          exit 0;
+        else
+          echo '❌ Sync failed with HTTP code: '$$HTTP_CODE;
+          exit 1;
+        fi
+      "
+    environment:
+      - SYNC_MODE=${SYNC_MODE:-incremental}
+      - SYNC_INCREMENTAL=${SYNC_INCREMENTAL:-true}
+      - PROJECT_ID=${PROJECT_ID:-default}
+    networks:
+      - reposync-network
+    restart: "no"
+
+networks:
+  reposync-network:
+    driver: bridge
+
+volumes:
+  data:
+  logs:
