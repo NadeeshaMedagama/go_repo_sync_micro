@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -115,7 +115,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v6
         with:
           name: integration-test-logs
           path: logs/
@@ -244,7 +244,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -279,7 +279,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate docker-compose.yml
         run: |
@@ -316,7 +316,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Generate SBOM for Go modules
         run: |
@@ -324,7 +324,7 @@ jobs:
           syft packages . -o spdx-json > sbom.spdx.json
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v6
         with:
           name: sbom
           path: sbom.spdx.json
