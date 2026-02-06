@@ -1,10 +1,14 @@
 # RepoSync - Go Microservices Edition
 
-[![CI/CD](https://github.com/nadeeshame/go_repo_sync_micro/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/ci-cd.yml)
-[![Docker Build & Test](https://github.com/nadeeshame/go_repo_sync_micro/actions/workflows/docker-build-test.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/docker-build-test.yml)
-[![CodeQL](https://github.com/nadeeshame/go_repo_sync_micro/actions/workflows/codeql-analysis.yml/badge.svg?branch=main)](https://github.com/nadeeshame/Go_RepoSync_Micro/actions/workflows/codeql-analysis.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nadeeshame/go_repo_sync_micro)](https://goreportcard.com/report/github.com/nadeeshame/Go_RepoSync_Micro)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[//]: # ([![CI/CD]&#40;https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/actions/workflows/ci-cd.yml/badge.svg?branch=main&#41;]&#40;https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/actions/workflows/ci-cd.yml&#41;)
+
+[//]: # ([![Docker Build & Test]&#40;https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/actions/workflows/docker-build-test.yml/badge.svg?branch=main&#41;]&#40;https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/actions/workflows/docker-build-test.yml&#41;)
+
+[//]: # ([![CodeQL]&#40;https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/actions/workflows/codeql-analysis.yml/badge.svg?branch=main&#41;]&#40;https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/actions/workflows/codeql-analysis.yml&#41;)
+
+[//]: # ([![Go Report Card]&#40;https://goreportcard.com/badge/github.com/NadeeshaMedagama/Go_RepoSync_Micro&#41;]&#40;https://goreportcard.com/report/github.com/NadeeshaMedagama/Go_RepoSync_Micro&#41;)
+
+[//]: # ([![License: MIT]&#40;https://img.shields.io/badge/License-MIT-yellow.svg&#41;]&#40;https://opensource.org/licenses/MIT&#41;)
 
 A robust, enterprise-grade microservices system built in Go for automatically synchronizing GitHub repositories with Pinecone vector databases for RAG (Retrieval-Augmented Generation) applications. Built with **SOLID principles** and designed for scalability and maintainability.
 
@@ -111,7 +115,7 @@ docker-compose up
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/nadeeshame/Go_RepoSync_Micro.git
+git clone https://github.com/NadeeshaMedagama/Go_RepoSync_Micro.git
 cd Go_RepoSync_Micro
 ```
 
@@ -130,9 +134,9 @@ AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
 AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=text-embedding-ada-002
 
 # GitHub
-GITHUB_TOKEN=your_github_token
-GITHUB_ORGANIZATION=your-org
-GITHUB_FILTER_KEYWORD=keyword
+GH_TOKEN=your_github_token
+GH_ORGANIZATION=your-org
+GH_FILTER_KEYWORD=keyword
 
 # Pinecone
 PINECONE_API_KEY=your_pinecone_key
@@ -222,9 +226,9 @@ The system automatically syncs at **8:00 AM UTC daily** via GitHub Actions.
    AZURE_OPENAI_API_KEY
    AZURE_OPENAI_ENDPOINT
    AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT
-   GITHUB_TOKEN
-   GITHUB_ORGANIZATION
-   GITHUB_FILTER_KEYWORD
+   GH_TOKEN
+   GH_ORGANIZATION
+   GH_FILTER_KEYWORD
    PINECONE_API_KEY
    PINECONE_INDEX_NAME
    SLACK_WEBHOOK_URL
@@ -546,8 +550,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Issues & Questions
 
-- **Bug Reports**: [GitHub Issues](https://github.com/nadeeshame/Go_RepoSync_Micro/issues)
-- **Feature Requests**: [GitHub Discussions](https://github.com/nadeeshame/Go_RepoSync_Micro/discussions)
+- **Bug Reports**: [GitHub Issues](https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/issues)
+- **Feature Requests**: [GitHub Discussions](https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/discussions)
 - **Documentation**: See `docs/` directory
 
 ### Troubleshooting
