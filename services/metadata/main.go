@@ -299,7 +299,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to create metadata service: %v", err)
 	}
-	defer service.Close()
+	defer func() { _ = service.Close() }()
 
 	// Setup HTTP server
 	mux := http.NewServeMux()
