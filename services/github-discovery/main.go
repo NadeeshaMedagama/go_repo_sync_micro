@@ -176,11 +176,11 @@ func (s *GitHubService) handleHealth(w http.ResponseWriter, r *http.Request) {
 	_, _, err := s.client.Users.Get(ctx, "")
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
 }
 
 func (s *GitHubService) handleRepositories(w http.ResponseWriter, r *http.Request) {
@@ -205,7 +205,7 @@ func (s *GitHubService) handleRepositories(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(repos)
+	_ = json.NewEncoder(w).Encode(repos)
 }
 
 func (s *GitHubService) handleChanges(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +256,7 @@ func (s *GitHubService) handleChanges(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(changes)
+	_ = json.NewEncoder(w).Encode(changes)
 }
 
 func main() {
