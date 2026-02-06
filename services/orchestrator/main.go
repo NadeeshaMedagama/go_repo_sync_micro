@@ -147,7 +147,7 @@ func (o *Orchestrator) discoverRepositories(ctx context.Context) ([]*models.Repo
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var repos []*models.Repository
 	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
@@ -165,7 +165,7 @@ func (o *Orchestrator) getChangedFiles(ctx context.Context, repo *models.Reposit
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var files []*models.FileChange
 	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
@@ -287,7 +287,7 @@ func (o *Orchestrator) chunkDocument(ctx context.Context, file *models.FileChang
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Documents []*models.Document `json:"documents"`
