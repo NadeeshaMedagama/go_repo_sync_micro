@@ -230,7 +230,7 @@ func (s *VectorStorageService) handleUpsert(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":   "success",
 		"upserted": len(req.Embeddings),
 	})
@@ -239,19 +239,19 @@ func (s *VectorStorageService) handleUpsert(w http.ResponseWriter, r *http.Reque
 func (s *VectorStorageService) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if err := s.Health(r.Context()); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
 		return
 	}
 
 	stats, err := s.DescribeIndex(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
 		return
 	}
 
 	stats["status"] = "healthy"
-	json.NewEncoder(w).Encode(stats)
+	_ = json.NewEncoder(w).Encode(stats)
 }
 
 func main() {
