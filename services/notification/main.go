@@ -169,11 +169,11 @@ func (s *NotificationService) handleNotify(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "sent"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "sent"})
 }
 
 func (s *NotificationService) handleHealth(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
 }
 
 func main() {
