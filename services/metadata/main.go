@@ -212,10 +212,10 @@ func (s *MetadataService) GetProject(ctx context.Context, projectID string) (*mo
 	}
 
 	if allowedExt != "" {
-		json.Unmarshal([]byte(allowedExt), &project.AllowedExtensions)
+		_ = json.Unmarshal([]byte(allowedExt), &project.AllowedExtensions)
 	}
 	if excludePat != "" {
-		json.Unmarshal([]byte(excludePat), &project.ExcludePatterns)
+		_ = json.Unmarshal([]byte(excludePat), &project.ExcludePatterns)
 	}
 
 	return &project, nil
@@ -243,10 +243,10 @@ func (s *MetadataService) ListProjects(ctx context.Context) ([]*models.Project, 
 		}
 
 		if allowedExt != "" {
-			json.Unmarshal([]byte(allowedExt), &project.AllowedExtensions)
+			_ = json.Unmarshal([]byte(allowedExt), &project.AllowedExtensions)
 		}
 		if excludePat != "" {
-			json.Unmarshal([]byte(excludePat), &project.ExcludePatterns)
+			_ = json.Unmarshal([]byte(excludePat), &project.ExcludePatterns)
 		}
 
 		results = append(results, &project)
@@ -272,10 +272,10 @@ func (s *MetadataService) Close() error {
 func (s *MetadataService) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if err := s.db.Ping(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
 }
 
 func main() {
