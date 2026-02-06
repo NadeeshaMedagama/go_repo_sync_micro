@@ -67,7 +67,7 @@ func (s *NotificationService) SendSlack(ctx context.Context, payload *models.Not
 	if err != nil {
 		return errors.Network("failed to send Slack notification", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
