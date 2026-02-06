@@ -1,0 +1,231 @@
+version: '3.8'
+
+# Docker Compose configuration for testing
+# This is used in CI/CD pipelines and local testing
+
+services:
+  metadata:
+    build:
+      context: .
+      dockerfile: services/metadata/Dockerfile
+    container_name: reposync-metadata-test
+    ports:
+      - "8086:8086"
+    environment:
+      - METADATA_DB_PATH=/data/test-metadata.db
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE_PATH=/logs/metadata-test.log
+      - METADATA_SERVICE_PORT=8086
+    volumes:
+      - test-data:/data
+      - test-logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - reposync-test-network
+
+  github-discovery:
+    build:
+      context: .
+      dockerfile: services/github-discovery/Dockerfile
+    container_name: reposync-github-test
+    ports:
+      - "8081:8081"
+    environment:
+      - GH_TOKEN=${GH_TOKEN:-test-token}
+      - GH_ORGANIZATION=${GH_ORGANIZATION:-test-org}
+      - GH_FILTER_KEYWORD=${GH_FILTER_KEYWORD:-test}
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE_PATH=/logs/github-test.log
+      - GITHUB_SERVICE_PORT=8081
+    volumes:
+      - test-logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - reposync-test-network
+
+  document-processor:
+    build:
+      context: .
+      dockerfile: services/document-processor/Dockerfile
+    container_name: reposync-document-processor-test
+    ports:
+      - "8082:8082"
+    environment:
+      - MAX_CHUNK_SIZE=1000
+      - CHUNK_OVERLAP=200
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE_PATH=/logs/document-processor-test.log
+      - DOCUMENT_PROCESSOR_PORT=8082
+    volumes:
+      - test-logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - reposync-test-network
+
+  embedding:
+    build:
+      context: .
+      dockerfile: services/embedding/Dockerfile
+    container_name: reposync-embedding-test
+    ports:
+      - "8083:8083"
+    environment:
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-test-key}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-https://test.openai.azure.com/}
+      - AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=${AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT:-test-deployment}
+      - AZURE_OPENAI_API_VERSION=2023-05-15
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE_PATH=/logs/embedding-test.log
+      - EMBEDDING_SERVICE_PORT=8083
+    volumes:
+      - test-logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - reposync-test-network
+
+  vector-storage:
+    build:
+      context: .
+      dockerfile: services/vector-storage/Dockerfile
+    container_name: reposync-vector-storage-test
+    ports:
+      - "8084:8084"
+    environment:
+      - PINECONE_API_KEY=${PINECONE_API_KEY:-test-pinecone-key}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-test-index}
+      - PINECONE_DIMENSION=1536
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE_PATH=/logs/vector-storage-test.log
+      - VECTOR_STORAGE_PORT=8084
+    volumes:
+      - test-logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - reposync-test-network
+
+  notification:
+    build:
+      context: .
+      dockerfile: services/notification/Dockerfile
+    container_name: reposync-notification-test
+    ports:
+      - "8085:8085"
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE_PATH=/logs/notification-test.log
+      - NOTIFICATION_SERVICE_PORT=8085
+    volumes:
+      - test-logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8085/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - reposync-test-network
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: services/orchestrator/Dockerfile
+    container_name: reposync-orchestrator-test
+    ports:
+      - "8080:8080"
+    environment:
+      - GITHUB_SERVICE_URL=http://github-discovery:8081
+      - DOCUMENT_PROCESSOR_URL=http://document-processor:8082
+      - EMBEDDING_SERVICE_URL=http://embedding:8083
+      - VECTOR_STORAGE_URL=http://vector-storage:8084
+      - NOTIFICATION_SERVICE_URL=http://notification:8085
+      - METADATA_SERVICE_URL=http://metadata:8086
+      - GH_TOKEN=${GH_TOKEN:-test-token}
+      - GH_ORGANIZATION=${GH_ORGANIZATION:-test-org}
+      - GH_FILTER_KEYWORD=${GH_FILTER_KEYWORD:-test}
+      - LOG_LEVEL=DEBUG
+      - LOG_FILE_PATH=/logs/orchestrator-test.log
+      - ORCHESTRATOR_PORT=8080
+    volumes:
+      - test-logs:/logs
+      - test-data:/data
+    depends_on:
+      metadata:
+        condition: service_healthy
+      github-discovery:
+        condition: service_healthy
+      document-processor:
+        condition: service_healthy
+      embedding:
+        condition: service_healthy
+      vector-storage:
+        condition: service_healthy
+      notification:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - reposync-test-network
+
+  # Test runner service
+  test-runner:
+    image: alpine:latest
+    container_name: reposync-test-runner
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    command: >
+      sh -c "
+        apk add --no-cache curl jq &&
+        echo 'Testing service health endpoints...' &&
+        curl -f http://orchestrator:8080/health || exit 1 &&
+        curl -f http://metadata:8086/health || exit 1 &&
+        curl -f http://github-discovery:8081/health || exit 1 &&
+        curl -f http://document-processor:8082/health || exit 1 &&
+        curl -f http://embedding:8083/health || exit 1 &&
+        curl -f http://vector-storage:8084/health || exit 1 &&
+        curl -f http://notification:8085/health || exit 1 &&
+        echo 'All health checks passed!' &&
+        echo 'Testing orchestrator API...' &&
+        curl -f http://orchestrator:8080/health | jq '.' &&
+        echo 'Tests completed successfully!'
+      "
+    networks:
+      - reposync-test-network
+
+networks:
+  reposync-test-network:
+    driver: bridge
+
+volumes:
+  test-data:
+  test-logs:
