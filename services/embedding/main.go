@@ -115,7 +115,7 @@ func (s *EmbeddingService) handleEmbed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (s *EmbeddingService) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -126,11 +126,11 @@ func (s *EmbeddingService) handleHealth(w http.ResponseWriter, r *http.Request) 
 	_, err := s.GenerateEmbedding(ctx, "test")
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "dimension": fmt.Sprintf("%d", s.dimension)})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "dimension": fmt.Sprintf("%d", s.dimension)})
 }
 
 func main() {
