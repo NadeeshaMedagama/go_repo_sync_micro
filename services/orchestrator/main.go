@@ -325,7 +325,7 @@ func (o *Orchestrator) generateEmbeddings(ctx context.Context, documents []*mode
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Embeddings [][]float32 `json:"embeddings"`
@@ -365,7 +365,7 @@ func (o *Orchestrator) upsertVectors(ctx context.Context, embeddings []*models.E
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -387,7 +387,7 @@ func (o *Orchestrator) saveMetadata(ctx context.Context, metadata *models.SyncMe
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return nil
 }
@@ -400,7 +400,7 @@ func (o *Orchestrator) getLastCommitSHA(ctx context.Context, projectID, reposito
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
