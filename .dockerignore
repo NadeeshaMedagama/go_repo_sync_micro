@@ -1,0 +1,77 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (keep critical docs)
+docs/
+*.md
+!README.md
+LICENSE
+
+# CI/CD
+.github/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Data and logs
+data/
+logs/
+*.log
+*.db
+
+# Test files
+*_test.go
+testdata/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage.out
+coverage.html
+
+# Docker
+docker-compose*.yml
+!docker-compose.yml
+Dockerfile
+!services/*/Dockerfile
+
+# Scripts
+scripts/
+*.sh
+
+# Node modules (if any)
+node_modules/
+
+# Python (if any)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
