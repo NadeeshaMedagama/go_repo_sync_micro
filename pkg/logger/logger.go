@@ -133,7 +133,7 @@ func (l *Logger) log(level LogLevel, format string, v ...interface{}) {
 	}
 
 	if l.fileWriter != nil {
-		l.fileWriter.Write([]byte(logLine))
+		_, _ = l.fileWriter.Write([]byte(logLine))
 	} else {
 		log.Print(logLine)
 	}
