@@ -130,7 +130,7 @@ func (s *MetadataService) ListSyncMetadata(ctx context.Context, projectID string
 	if err != nil {
 		return nil, errors.Database("failed to list sync metadata", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []*models.SyncMetadata
 	for rows.Next() {
@@ -229,7 +229,7 @@ func (s *MetadataService) ListProjects(ctx context.Context) ([]*models.Project, 
 	if err != nil {
 		return nil, errors.Database("failed to list projects", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []*models.Project
 	for rows.Next() {
