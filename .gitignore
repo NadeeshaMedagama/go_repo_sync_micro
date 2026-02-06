@@ -1,0 +1,43 @@
+# RepoSync data and logs
+data/
+logs/
+*.db
+*.log
+
+# Environment files
+.env
+.env.local
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+vendor/
+
+# Test binary
+*.test
+*.out
+
+# Go coverage
+coverage.out
+coverage.html
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Docker
+*.tar
+
+# Temporary files
+tmp/
+temp/
