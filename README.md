@@ -550,8 +550,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Issues & Questions
 
-- **Bug Reports**: [GitHub Issues](https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/issues)
-- **Feature Requests**: [GitHub Discussions](https://github.com/NadeeshaMedagama/Go_RepoSync_Micro/discussions)
+- **Bug Reports**: [GitHub Issues](https://github.com/nadeeshame/Go_RepoSync_Micro/issues)
+- **Feature Requests**: [GitHub Discussions](https://github.com/nadeeshame/Go_RepoSync_Micro/discussions)
 - **Documentation**: See `docs/` directory
 
 ### Troubleshooting
