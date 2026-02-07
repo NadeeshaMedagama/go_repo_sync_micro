@@ -262,6 +262,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate vector-storage-specific requirements
+	if err := cfg.ValidateForVectorStorage(); err != nil {
+		fmt.Printf("Failed to validate configuration: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Initialize logger
 	if err := logger.Init(cfg.Logging.Level, cfg.Logging.FilePath, "vector-storage"); err != nil {
 		fmt.Printf("Failed to initialize logger: %v\n", err)
