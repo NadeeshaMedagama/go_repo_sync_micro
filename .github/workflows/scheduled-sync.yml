@@ -60,17 +60,40 @@ jobs:
       - name: Start metadata service
         run: |
           ./bin/metadata &
-          sleep 5
+          echo "Waiting for metadata service to start..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:9086/health > /dev/null 2>&1; then
+              echo "✓ Metadata service is ready"
+              break
+            fi
+            echo "Waiting for metadata service... ($i/30)"
+            sleep 2
+          done
         env:
           METADATA_DB_PATH: ./data/metadata.db
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/metadata.log
           METADATA_SERVICE_PORT: 9086
+          # Required by config validation
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
 
       - name: Start GitHub discovery service
         run: |
           ./bin/github-discovery &
-          sleep 3
+          echo "Waiting for GitHub discovery service to start..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:9081/health > /dev/null 2>&1; then
+              echo "✓ GitHub discovery service is ready"
+              break
+            fi
+            echo "Waiting for GitHub discovery service... ($i/30)"
+            sleep 2
+          done
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
@@ -78,22 +101,50 @@ jobs:
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/github.log
           GITHUB_SERVICE_PORT: 9081
+          # Required by config validation
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
 
       - name: Start document processor service
         run: |
           ./bin/document-processor &
-          sleep 3
+          echo "Waiting for document processor service to start..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:9082/health > /dev/null 2>&1; then
+              echo "✓ Document processor service is ready"
+              break
+            fi
+            echo "Waiting for document processor service... ($i/30)"
+            sleep 2
+          done
         env:
           MAX_CHUNK_SIZE: 1000
           CHUNK_OVERLAP: 200
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/document-processor.log
           DOCUMENT_PROCESSOR_PORT: 9082
+          # Required by config validation
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
 
       - name: Start embedding service
         run: |
           ./bin/embedding &
-          sleep 3
+          echo "Waiting for embedding service to start..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:9083/health > /dev/null 2>&1; then
+              echo "✓ Embedding service is ready"
+              break
+            fi
+            echo "Waiting for embedding service... ($i/30)"
+            sleep 2
+          done
         env:
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
           AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
@@ -102,11 +153,24 @@ jobs:
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/embedding.log
           EMBEDDING_SERVICE_PORT: 9083
+          # Required by config validation
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
 
       - name: Start vector storage service
         run: |
           ./bin/vector-storage &
-          sleep 3
+          echo "Waiting for vector storage service to start..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:9084/health > /dev/null 2>&1; then
+              echo "✓ Vector storage service is ready"
+              break
+            fi
+            echo "Waiting for vector storage service... ($i/30)"
+            sleep 2
+          done
         env:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
@@ -114,16 +178,36 @@ jobs:
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/vector-storage.log
           VECTOR_STORAGE_PORT: 9084
+          # Required by config validation
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
 
       - name: Start notification service
         run: |
           ./bin/notification &
-          sleep 3
+          echo "Waiting for notification service to start..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:9085/health > /dev/null 2>&1; then
+              echo "✓ Notification service is ready"
+              break
+            fi
+            echo "Waiting for notification service... ($i/30)"
+            sleep 2
+          done
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/notification.log
           NOTIFICATION_SERVICE_PORT: 9085
+          # Required by config validation
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
 
       - name: Start orchestrator service
         run: |
