@@ -490,6 +490,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate orchestrator-specific requirements (needs GitHub config)
+	if err := cfg.ValidateForGitHub(); err != nil {
+		fmt.Printf("Failed to validate configuration: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Initialize logger
 	if err := logger.Init(cfg.Logging.Level, cfg.Logging.FilePath, "orchestrator"); err != nil {
 		fmt.Printf("Failed to initialize logger: %v\n", err)
