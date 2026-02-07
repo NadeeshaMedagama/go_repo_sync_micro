@@ -165,7 +165,7 @@ jobs:
         run: |
           echo "Checking Orchestrator..."
           for i in {1..30}; do
-            if curl -f http://localhost:8080/health > /dev/null 2>&1; then
+            if curl -f http://localhost:9090/health > /dev/null 2>&1; then
               echo "✓ Orchestrator is healthy"
               break
             fi
@@ -174,7 +174,7 @@ jobs:
           done
           
           echo "Checking all services..."
-          services=(8080 8081 8082 8083 8084 8085 8086)
+          services=(9090 9081 9082 9083 9084 9085 9086)
           service_names=("Orchestrator" "GitHub" "Document" "Embedding" "Vector" "Notification" "Metadata")
           
           for i in "${!services[@]}"; do
@@ -195,7 +195,7 @@ jobs:
           echo "Testing orchestrator endpoints..."
           
           # Test health endpoint
-          curl -f http://localhost:8080/health || exit 1
+          curl -f http://localhost:9090/health || exit 1
           
           # Note: Actual sync test would require real credentials
           # This is a smoke test to verify services are running
