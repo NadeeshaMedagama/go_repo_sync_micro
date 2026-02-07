@@ -146,6 +146,10 @@ jobs:
           LOG_FILE_PATH=./logs/reposync.log
           METADATA_DB_PATH=./data/test-metadata.db
           EOF
+          # Remove leading whitespace from .env file
+          sed -i 's/^[[:space:]]*//' .env
+          echo "Created .env file:"
+          cat .env
 
       - name: Build all services
         run: |
@@ -280,6 +284,26 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Create minimal .env file for validation
+        run: |
+          cat > .env << 'EOF'
+          # Minimal env file for docker-compose validation
+          SLACK_WEBHOOK_URL=https://hooks.slack.com/services/TEST/WEBHOOK
+          GH_TOKEN=test-token
+          GH_ORGANIZATION=test-org
+          GH_FILTER_KEYWORD=test
+          AZURE_OPENAI_API_KEY=test-key
+          AZURE_OPENAI_ENDPOINT=https://test.openai.azure.com/
+          AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=test-deployment
+          PINECONE_API_KEY=test-pinecone-key
+          PINECONE_INDEX_NAME=test-index
+          LOG_LEVEL=INFO
+          EOF
+          # Remove leading whitespace from .env file
+          sed -i 's/^[[:space:]]*//' .env
+          echo "Created .env file:"
+          cat .env
 
       - name: Validate docker-compose.yml
         run: |
