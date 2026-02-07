@@ -98,9 +98,30 @@ func (s *GitHubService) GetChangedFiles(ctx context.Context, repo *models.Reposi
 			changeType = *file.Status
 		}
 
+		// Skip deleted files - no content to fetch
+		if changeType == "removed" || changeType == "deleted" {
+			changes = append(changes, &models.FileChange{
+				Repository:   repo.FullName,
+				FilePath:     *file.Filename,
+				CommitSHA:    *latestCommit.SHA,
+				LastModified: latestCommit.Commit.Author.Date.Time,
+				ChangeType:   changeType,
+				Size:         int64(*file.Changes),
+			})
+			continue
+		}
+
+		// Fetch file content for added/modified files
+		content, err := s.GetFileContent(ctx, repo.Owner, repo.Name, *file.Filename, repo.DefaultBranch)
+		if err != nil {
+			logger.Warning("Failed to get content for %s: %v", *file.Filename, err)
+			continue
+		}
+
 		changes = append(changes, &models.FileChange{
 			Repository:   repo.FullName,
 			FilePath:     *file.Filename,
+			Content:      string(content),
 			CommitSHA:    *latestCommit.SHA,
 			LastModified: latestCommit.Commit.Author.Date.Time,
 			ChangeType:   changeType,
@@ -128,9 +149,17 @@ func (s *GitHubService) getAllFiles(ctx context.Context, repo *models.Repository
 
 	for _, entry := range tree.Entries {
 		if *entry.Type == "blob" {
+			// Fetch file content
+			content, err := s.GetFileContent(ctx, repo.Owner, repo.Name, *entry.Path, repo.DefaultBranch)
+			if err != nil {
+				logger.Warning("Failed to get content for %s: %v", *entry.Path, err)
+				continue
+			}
+
 			files = append(files, &models.FileChange{
 				Repository:   repo.FullName,
 				FilePath:     *entry.Path,
+				Content:      string(content),
 				CommitSHA:    latestSHA,
 				LastModified: time.Now(),
 				ChangeType:   "added",
@@ -264,6 +293,12 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Validate GitHub-specific requirements
+	if err := cfg.ValidateForGitHub(); err != nil {
+		fmt.Printf("Failed to validate configuration: %v\n", err)
 		os.Exit(1)
 	}
 
