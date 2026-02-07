@@ -141,6 +141,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate embedding-specific requirements
+	if err := cfg.ValidateForEmbedding(); err != nil {
+		fmt.Printf("Failed to validate configuration: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Initialize logger
 	if err := logger.Init(cfg.Logging.Level, cfg.Logging.FilePath, "embedding-service"); err != nil {
 		fmt.Printf("Failed to initialize logger: %v\n", err)
