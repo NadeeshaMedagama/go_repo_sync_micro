@@ -172,24 +172,56 @@ func Load() (*Config, error) {
 }
 
 // Validate checks if all required configuration is present
+// Validation is now lenient - each service validates only what it needs
 func (c *Config) Validate() error {
-	if c.AzureOpenAI.APIKey == "" {
-		return fmt.Errorf("AZURE_OPENAI_API_KEY is required")
-	}
-	if c.AzureOpenAI.Endpoint == "" {
-		return fmt.Errorf("AZURE_OPENAI_ENDPOINT is required")
-	}
+	// No global validation - each service should validate its own requirements
+	// This allows services to run independently without all env vars being set
+	return nil
+}
+
+// ValidateForGitHub validates GitHub-specific requirements
+func (c *Config) ValidateForGitHub() error {
 	if c.GitHub.Token == "" {
 		return fmt.Errorf("GH_TOKEN is required")
 	}
 	if c.GitHub.Organization == "" {
 		return fmt.Errorf("GH_ORGANIZATION is required")
 	}
+	return nil
+}
+
+// ValidateForEmbedding validates embedding service requirements
+func (c *Config) ValidateForEmbedding() error {
+	if c.AzureOpenAI.APIKey == "" {
+		return fmt.Errorf("AZURE_OPENAI_API_KEY is required")
+	}
+	if c.AzureOpenAI.Endpoint == "" {
+		return fmt.Errorf("AZURE_OPENAI_ENDPOINT is required")
+	}
+	return nil
+}
+
+// ValidateForVectorStorage validates vector storage requirements
+func (c *Config) ValidateForVectorStorage() error {
 	if c.Pinecone.APIKey == "" {
 		return fmt.Errorf("PINECONE_API_KEY is required")
 	}
 	if c.Pinecone.IndexName == "" {
 		return fmt.Errorf("PINECONE_INDEX_NAME is required")
+	}
+	return nil
+}
+
+// ValidateForOrchestrator validates orchestrator requirements (needs all)
+func (c *Config) ValidateForOrchestrator() error {
+	if err := c.ValidateForGitHub(); err != nil {
+		return err
+	}
+	if err := c.ValidateForEmbedding(); err != nil {
+		return err
+	}
+	if err := c.ValidateForVectorStorage(); err != nil {
+		return err
 	}
 	return nil
 }
