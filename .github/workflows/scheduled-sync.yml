@@ -65,7 +65,7 @@ jobs:
           METADATA_DB_PATH: ./data/metadata.db
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/metadata.log
-          METADATA_SERVICE_PORT: 8086
+          METADATA_SERVICE_PORT: 9086
 
       - name: Start GitHub discovery service
         run: |
@@ -77,7 +77,7 @@ jobs:
           GH_FILTER_KEYWORD: ${{ secrets.GH_FILTER_KEYWORD }}
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/github.log
-          GITHUB_SERVICE_PORT: 8081
+          GITHUB_SERVICE_PORT: 9081
 
       - name: Start document processor service
         run: |
@@ -88,7 +88,7 @@ jobs:
           CHUNK_OVERLAP: 200
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/document-processor.log
-          DOCUMENT_PROCESSOR_PORT: 8082
+          DOCUMENT_PROCESSOR_PORT: 9082
 
       - name: Start embedding service
         run: |
@@ -101,7 +101,7 @@ jobs:
           AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/embedding.log
-          EMBEDDING_SERVICE_PORT: 8083
+          EMBEDDING_SERVICE_PORT: 9083
 
       - name: Start vector storage service
         run: |
@@ -113,7 +113,7 @@ jobs:
           PINECONE_DIMENSION: 1536
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/vector-storage.log
-          VECTOR_STORAGE_PORT: 8084
+          VECTOR_STORAGE_PORT: 9084
 
       - name: Start notification service
         run: |
@@ -123,19 +123,19 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/notification.log
-          NOTIFICATION_SERVICE_PORT: 8085
+          NOTIFICATION_SERVICE_PORT: 9085
 
       - name: Start orchestrator service
         run: |
           ./bin/orchestrator &
           sleep 5
         env:
-          GITHUB_SERVICE_URL: http://localhost:8081
-          DOCUMENT_PROCESSOR_URL: http://localhost:8082
-          EMBEDDING_SERVICE_URL: http://localhost:8083
-          VECTOR_STORAGE_URL: http://localhost:8084
-          NOTIFICATION_SERVICE_URL: http://localhost:8085
-          METADATA_SERVICE_URL: http://localhost:8086
+          GITHUB_SERVICE_URL: http://localhost:9081
+          DOCUMENT_PROCESSOR_URL: http://localhost:9082
+          EMBEDDING_SERVICE_URL: http://localhost:9083
+          VECTOR_STORAGE_URL: http://localhost:9084
+          NOTIFICATION_SERVICE_URL: http://localhost:9085
+          METADATA_SERVICE_URL: http://localhost:9086
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
           GH_FILTER_KEYWORD: ${{ secrets.GH_FILTER_KEYWORD }}
@@ -146,12 +146,12 @@ jobs:
           PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME }}
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/orchestrator.log
-          ORCHESTRATOR_PORT: 8080
+          ORCHESTRATOR_PORT: 9090
 
       - name: Wait for services to be healthy
         run: |
           for i in {1..30}; do
-            if curl -f http://localhost:8080/health > /dev/null 2>&1; then
+            if curl -f http://localhost:9090/health > /dev/null 2>&1; then
               echo "Orchestrator is healthy"
               break
             fi
@@ -166,7 +166,7 @@ jobs:
           
           echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID)"
           
-          curl -X POST "http://localhost:8080/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
+          curl -X POST "http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
             -H "Content-Type: application/json" \
             -o sync-result.json \
             -w "\nHTTP Status: %{http_code}\n"
