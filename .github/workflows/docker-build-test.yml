@@ -149,11 +149,11 @@ jobs:
 
       - name: Build all services
         run: |
-          docker-compose build --parallel
+          docker compose build --parallel
 
       - name: Start services
         run: |
-          docker-compose up -d
+          docker compose up -d
           echo "Waiting for services to start..."
           sleep 30
 
@@ -181,7 +181,7 @@ jobs:
               echo "✓ $name service (port $port) is healthy"
             else
               echo "✗ $name service (port $port) is not responding"
-              docker-compose logs "${name,,}"
+              docker compose logs "${name,,}"
               exit 1
             fi
           done
@@ -200,18 +200,18 @@ jobs:
         if: always()
         run: |
           echo "=== Orchestrator Logs ==="
-          docker-compose logs orchestrator | tail -50
+          docker compose logs orchestrator | tail -50
           
           echo "=== Metadata Logs ==="
-          docker-compose logs metadata | tail -50
+          docker compose logs metadata | tail -50
           
           echo "=== GitHub Discovery Logs ==="
-          docker-compose logs github-discovery | tail -50
+          docker compose logs github-discovery | tail -50
 
       - name: Stop services
         if: always()
         run: |
-          docker-compose down -v
+          docker compose down -v
 
       - name: Upload logs
         if: always()
@@ -283,7 +283,7 @@ jobs:
 
       - name: Validate docker-compose.yml
         run: |
-          docker-compose config > /dev/null
+          docker compose config > /dev/null
           echo "✓ docker-compose.yml is valid"
 
       - name: Check for security issues in Dockerfiles
