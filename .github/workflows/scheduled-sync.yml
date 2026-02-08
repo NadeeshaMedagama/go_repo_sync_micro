@@ -234,14 +234,52 @@ jobs:
 
       - name: Wait for services to be healthy
         run: |
+          echo "Checking all services health..."
+          
+          # Define all services to check
+          declare -A services=(
+            ["metadata"]="http://localhost:9086/health"
+            ["github-discovery"]="http://localhost:9081/health"
+            ["document-processor"]="http://localhost:9082/health"
+            ["embedding"]="http://localhost:9083/health"
+            ["vector-storage"]="http://localhost:9084/health"
+            ["notification"]="http://localhost:9085/health"
+            ["orchestrator"]="http://localhost:9090/health"
+          )
+          
+          all_healthy=false
           for i in {1..30}; do
-            if curl -f http://localhost:9090/health > /dev/null 2>&1; then
-              echo "Orchestrator is healthy"
+            all_healthy=true
+            for service in "${!services[@]}"; do
+              if ! curl -sf "${services[$service]}" > /dev/null 2>&1; then
+                echo "  ✗ $service not ready"
+                all_healthy=false
+              else
+                echo "  ✓ $service is healthy"
+              fi
+            done
+            
+            if [ "$all_healthy" = true ]; then
+              echo "All services are healthy!"
               break
             fi
-            echo "Waiting for orchestrator to be healthy..."
-            sleep 2
+            
+            echo "Waiting for all services to be healthy... ($i/30)"
+            sleep 3
           done
+          
+          if [ "$all_healthy" != true ]; then
+            echo "ERROR: Not all services became healthy in time"
+            echo "Service status:"
+            for service in "${!services[@]}"; do
+              if curl -sf "${services[$service]}" > /dev/null 2>&1; then
+                echo "  ✓ $service: healthy"
+              else
+                echo "  ✗ $service: unhealthy"
+              fi
+            done
+            exit 1
+          fi
 
       - name: Trigger sync
         run: |
@@ -250,27 +288,37 @@ jobs:
           
           echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID)"
           
-          # Make the sync request with proper error handling
+          # Make the sync request with extended timeout for large operations
+          # --max-time 900 = 15 minutes, --connect-timeout 30 = 30 seconds for connection
           HTTP_CODE=$(curl -s -X POST "http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
             -H "Content-Type: application/json" \
-            --max-time 300 \
+            --connect-timeout 30 \
+            --max-time 900 \
             -o sync-result.json \
             -w "%{http_code}")
           
+          CURL_EXIT_CODE=$?
+          echo "Curl exit code: $CURL_EXIT_CODE"
           echo "HTTP Status: $HTTP_CODE"
           
-          # Check if we got a valid response file
-          if [ ! -s sync-result.json ]; then
+          # Handle curl-specific exit codes
+          if [ $CURL_EXIT_CODE -eq 28 ]; then
+            echo "Error: Sync operation timed out after 15 minutes"
+            echo '{"success": false, "errors": ["Sync operation timed out - consider running with smaller scope or check service logs"]}' > sync-result.json
+          elif [ $CURL_EXIT_CODE -eq 7 ]; then
+            echo "Error: Failed to connect to orchestrator service"
+            echo '{"success": false, "errors": ["Connection refused - orchestrator service may have crashed"]}' > sync-result.json
+          elif [ ! -s sync-result.json ]; then
             echo "Error: No response received from sync endpoint"
             echo '{"success": false, "errors": ["No response from orchestrator"]}' > sync-result.json
           fi
           
           # Display the result
-          cat sync-result.json | jq '.' || cat sync-result.json
+          cat sync-result.json | jq '.' 2>/dev/null || cat sync-result.json
           
-          # Fail if HTTP status indicates an error
-          if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" -eq 000 ]; then
-            echo "Error: Sync request failed with HTTP status $HTTP_CODE"
+          # Fail if HTTP status indicates an error or curl failed
+          if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" -eq 000 ] || [ $CURL_EXIT_CODE -ne 0 ]; then
+            echo "Error: Sync request failed (HTTP: $HTTP_CODE, curl: $CURL_EXIT_CODE)"
             exit 1
           fi
 
