@@ -9,7 +9,7 @@ on:
       incremental:
         description: 'Run incremental sync (only changed files)'
         required: false
-        default: 'true'
+        default: true
         type: boolean
       project_id:
         description: 'Project ID to sync (default: all projects)'
@@ -250,12 +250,29 @@ jobs:
           
           echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID)"
           
-          curl -X POST "http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
+          # Make the sync request with proper error handling
+          HTTP_CODE=$(curl -s -X POST "http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
             -H "Content-Type: application/json" \
+            --max-time 300 \
             -o sync-result.json \
-            -w "\nHTTP Status: %{http_code}\n"
+            -w "%{http_code}")
           
-          cat sync-result.json | jq '.'
+          echo "HTTP Status: $HTTP_CODE"
+          
+          # Check if we got a valid response file
+          if [ ! -s sync-result.json ]; then
+            echo "Error: No response received from sync endpoint"
+            echo '{"success": false, "errors": ["No response from orchestrator"]}' > sync-result.json
+          fi
+          
+          # Display the result
+          cat sync-result.json | jq '.' || cat sync-result.json
+          
+          # Fail if HTTP status indicates an error
+          if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" -eq 000 ]; then
+            echo "Error: Sync request failed with HTTP status $HTTP_CODE"
+            exit 1
+          fi
 
       - name: Upload logs
         if: always()
@@ -275,10 +292,27 @@ jobs:
 
       - name: Check sync result
         run: |
-          SUCCESS=$(cat sync-result.json | jq -r '.success')
+          # Validate that sync-result.json exists and is valid JSON
+          if [ ! -f sync-result.json ]; then
+            echo "Error: sync-result.json not found"
+            exit 1
+          fi
+          
+          if ! jq empty sync-result.json 2>/dev/null; then
+            echo "Error: sync-result.json is not valid JSON"
+            cat sync-result.json
+            exit 1
+          fi
+          
+          SUCCESS=$(jq -r '.success // false' sync-result.json)
           if [ "$SUCCESS" != "true" ]; then
             echo "Sync failed!"
-            cat sync-result.json | jq '.errors'
+            echo "Errors:"
+            jq -r '.errors[]? // "No error details available"' sync-result.json
+            echo "Warnings:"
+            jq -r '.warnings[]? // empty' sync-result.json
             exit 1
           fi
           echo "Sync completed successfully!"
+          echo "Summary:"
+          jq '{repositories_scanned: .repositories_scanned, files_processed: .files_processed, embeddings_generated: .embeddings_generated, duration: .duration}' sync-result.json || true
