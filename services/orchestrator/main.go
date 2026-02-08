@@ -39,7 +39,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 		vectorStorageURL:       getServiceURL("VECTOR_STORAGE_URL", "http://localhost:8084"),
 		notificationServiceURL: getServiceURL("NOTIFICATION_SERVICE_URL", "http://localhost:8085"),
 		metadataServiceURL:     getServiceURL("METADATA_SERVICE_URL", "http://localhost:8086"),
-		httpClient:             &http.Client{Timeout: 60 * time.Second},
+		httpClient:             &http.Client{Timeout: 5 * time.Minute},
 		config:                 cfg,
 	}
 }
