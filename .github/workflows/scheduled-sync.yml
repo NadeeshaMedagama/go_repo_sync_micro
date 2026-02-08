@@ -20,6 +20,7 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -282,11 +283,19 @@ jobs:
           fi
 
       - name: Trigger sync
+        timeout-minutes: 20
         run: |
           INCREMENTAL="${{ github.event.inputs.incremental || 'true' }}"
           PROJECT_ID="${{ github.event.inputs.project_id || 'default' }}"
           
           echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID)"
+          
+          # Verify orchestrator is still running before making request
+          if ! curl -sf http://localhost:9090/health > /dev/null 2>&1; then
+            echo "Error: Orchestrator service is not responding"
+            echo '{"success": false, "errors": ["Orchestrator service is not responding before sync"]}' > sync-result.json
+            exit 1
+          fi
           
           # Make the sync request with extended timeout for large operations
           # --max-time 900 = 15 minutes, --connect-timeout 30 = 30 seconds for connection
@@ -295,11 +304,23 @@ jobs:
             --connect-timeout 30 \
             --max-time 900 \
             -o sync-result.json \
-            -w "%{http_code}")
+            -w "%{http_code}") || CURL_EXIT_CODE=$?
           
-          CURL_EXIT_CODE=$?
+          CURL_EXIT_CODE=${CURL_EXIT_CODE:-0}
           echo "Curl exit code: $CURL_EXIT_CODE"
           echo "HTTP Status: $HTTP_CODE"
+          
+          # Check service health after sync attempt
+          echo "Checking services health after sync..."
+          for service in metadata:9086 github-discovery:9081 document-processor:9082 embedding:9083 vector-storage:9084 notification:9085 orchestrator:9090; do
+            name="${service%:*}"
+            port="${service#*:}"
+            if curl -sf "http://localhost:$port/health" > /dev/null 2>&1; then
+              echo "  ✓ $name is still running"
+            else
+              echo "  ✗ $name has crashed or is unresponsive"
+            fi
+          done
           
           # Handle curl-specific exit codes
           if [ $CURL_EXIT_CODE -eq 28 ]; then
@@ -308,6 +329,9 @@ jobs:
           elif [ $CURL_EXIT_CODE -eq 7 ]; then
             echo "Error: Failed to connect to orchestrator service"
             echo '{"success": false, "errors": ["Connection refused - orchestrator service may have crashed"]}' > sync-result.json
+          elif [ $CURL_EXIT_CODE -eq 56 ]; then
+            echo "Error: Connection reset by peer - service may have crashed during sync"
+            echo '{"success": false, "errors": ["Connection reset - a service may have crashed during sync"]}' > sync-result.json
           elif [ ! -s sync-result.json ]; then
             echo "Error: No response received from sync endpoint"
             echo '{"success": false, "errors": ["No response from orchestrator"]}' > sync-result.json
@@ -316,8 +340,15 @@ jobs:
           # Display the result
           cat sync-result.json | jq '.' 2>/dev/null || cat sync-result.json
           
+          # Show logs if sync failed
+          if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" = "000" ] || [ $CURL_EXIT_CODE -ne 0 ]; then
+            echo "--- Orchestrator logs (last 50 lines) ---"
+            tail -50 ./logs/orchestrator.log 2>/dev/null || echo "No orchestrator logs available"
+            echo "--- End of logs ---"
+          fi
+          
           # Fail if HTTP status indicates an error or curl failed
-          if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" -eq 000 ] || [ $CURL_EXIT_CODE -ne 0 ]; then
+          if [ "$HTTP_CODE" -ge 400 ] || [ "$HTTP_CODE" = "000" ] || [ $CURL_EXIT_CODE -ne 0 ]; then
             echo "Error: Sync request failed (HTTP: $HTTP_CODE, curl: $CURL_EXIT_CODE)"
             exit 1
           fi
@@ -364,3 +395,17 @@ jobs:
           echo "Sync completed successfully!"
           echo "Summary:"
           jq '{repositories_scanned: .repositories_scanned, files_processed: .files_processed, embeddings_generated: .embeddings_generated, duration: .duration}' sync-result.json || true
+
+      - name: Cleanup background processes
+        if: always()
+        run: |
+          echo "Stopping background services..."
+          pkill -f "./bin/orchestrator" || true
+          pkill -f "./bin/metadata" || true
+          pkill -f "./bin/github-discovery" || true
+          pkill -f "./bin/document-processor" || true
+          pkill -f "./bin/embedding" || true
+          pkill -f "./bin/vector-storage" || true
+          pkill -f "./bin/notification" || true
+          echo "All services stopped"
+
