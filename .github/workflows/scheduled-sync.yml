@@ -85,9 +85,24 @@ jobs:
 
       - name: Start GitHub discovery service
         run: |
-          ./bin/github-discovery &
+          echo "Starting GitHub discovery service..."
+          ./bin/github-discovery > ./logs/github-discovery-stdout.log 2>&1 &
+          GITHUB_PID=$!
+          echo $GITHUB_PID > ./github-discovery.pid
+          echo "GitHub discovery service started with PID: $GITHUB_PID"
+          
           echo "Waiting for GitHub discovery service to start..."
           for i in {1..30}; do
+            # Check if process is still running
+            if ! kill -0 $GITHUB_PID 2>/dev/null; then
+              echo "ERROR: GitHub discovery service crashed!"
+              echo "--- Stdout/Stderr log ---"
+              cat ./logs/github-discovery-stdout.log 2>/dev/null || echo "No stdout log"
+              echo "--- Service log ---"
+              cat ./logs/github.log 2>/dev/null || echo "No service log"
+              exit 1
+            fi
+            
             if curl -sf http://localhost:9081/health > /dev/null 2>&1; then
               echo "✓ GitHub discovery service is ready"
               break
@@ -95,6 +110,16 @@ jobs:
             echo "Waiting for GitHub discovery service... ($i/30)"
             sleep 2
           done
+          
+          # Final check
+          if ! curl -sf http://localhost:9081/health > /dev/null 2>&1; then
+            echo "ERROR: GitHub discovery service failed to become healthy"
+            echo "--- Stdout/Stderr log ---"
+            cat ./logs/github-discovery-stdout.log 2>/dev/null || echo "No stdout log"
+            echo "--- Service log ---"
+            cat ./logs/github.log 2>/dev/null || echo "No service log"
+            exit 1
+          fi
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GH_ORGANIZATION: ${{ secrets.GH_ORGANIZATION }}
@@ -277,6 +302,22 @@ jobs:
                 echo "  ✓ $service: healthy"
               else
                 echo "  ✗ $service: unhealthy"
+                # Show logs for unhealthy services
+                if [ "$service" = "github-discovery" ]; then
+                  echo "--- GitHub Discovery stdout log ---"
+                  cat ./logs/github-discovery-stdout.log 2>/dev/null || echo "No stdout log"
+                  echo "--- GitHub Discovery service log ---"
+                  tail -50 ./logs/github.log 2>/dev/null || echo "No service log"
+                  echo "--- Checking if process is running ---"
+                  if [ -f ./github-discovery.pid ]; then
+                    PID=$(cat ./github-discovery.pid)
+                    if kill -0 $PID 2>/dev/null; then
+                      echo "Process $PID is still running"
+                    else
+                      echo "Process $PID has crashed"
+                    fi
+                  fi
+                fi
               fi
             done
             exit 1
