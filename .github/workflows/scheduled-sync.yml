@@ -21,6 +21,10 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Prevent concurrent runs from interfering
+    concurrency:
+      group: sync-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
@@ -60,7 +64,7 @@ jobs:
 
       - name: Start metadata service
         run: |
-          ./bin/metadata &
+          nohup ./bin/metadata > ./logs/metadata-stdout.log 2>&1 &
           echo "Waiting for metadata service to start..."
           for i in {1..30}; do
             if curl -sf http://localhost:9086/health > /dev/null 2>&1; then
@@ -86,8 +90,9 @@ jobs:
       - name: Start GitHub discovery service
         run: |
           echo "Starting GitHub discovery service..."
-          ./bin/github-discovery > ./logs/github-discovery-stdout.log 2>&1 &
+          nohup ./bin/github-discovery > ./logs/github-discovery-stdout.log 2>&1 &
           GITHUB_PID=$!
+          disown $GITHUB_PID
           echo $GITHUB_PID > ./github-discovery.pid
           echo "GitHub discovery service started with PID: $GITHUB_PID"
           
@@ -135,7 +140,7 @@ jobs:
 
       - name: Start document processor service
         run: |
-          ./bin/document-processor &
+          nohup ./bin/document-processor > ./logs/document-processor-stdout.log 2>&1 &
           echo "Waiting for document processor service to start..."
           for i in {1..30}; do
             if curl -sf http://localhost:9082/health > /dev/null 2>&1; then
@@ -161,7 +166,7 @@ jobs:
 
       - name: Start embedding service
         run: |
-          ./bin/embedding &
+          nohup ./bin/embedding > ./logs/embedding-stdout.log 2>&1 &
           echo "Waiting for embedding service to start..."
           for i in {1..30}; do
             if curl -sf http://localhost:9083/health > /dev/null 2>&1; then
@@ -187,7 +192,7 @@ jobs:
 
       - name: Start vector storage service
         run: |
-          ./bin/vector-storage &
+          nohup ./bin/vector-storage > ./logs/vector-storage-stdout.log 2>&1 &
           echo "Waiting for vector storage service to start..."
           for i in {1..30}; do
             if curl -sf http://localhost:9084/health > /dev/null 2>&1; then
@@ -212,7 +217,7 @@ jobs:
 
       - name: Start notification service
         run: |
-          ./bin/notification &
+          nohup ./bin/notification > ./logs/notification-stdout.log 2>&1 &
           echo "Waiting for notification service to start..."
           for i in {1..30}; do
             if curl -sf http://localhost:9085/health > /dev/null 2>&1; then
@@ -237,8 +242,42 @@ jobs:
 
       - name: Start orchestrator service
         run: |
-          ./bin/orchestrator &
-          sleep 5
+          echo "Starting orchestrator service..."
+          nohup ./bin/orchestrator > ./logs/orchestrator-stdout.log 2>&1 &
+          ORCH_PID=$!
+          disown $ORCH_PID
+          echo $ORCH_PID > ./orchestrator.pid
+          echo "Orchestrator service started with PID: $ORCH_PID"
+          
+          echo "Waiting for orchestrator service to start..."
+          for i in {1..30}; do
+            # Check if process is still running
+            if ! kill -0 $ORCH_PID 2>/dev/null; then
+              echo "ERROR: Orchestrator service crashed!"
+              echo "--- Stdout/Stderr log ---"
+              cat ./logs/orchestrator-stdout.log 2>/dev/null || echo "No stdout log"
+              echo "--- Service log ---"
+              cat ./logs/orchestrator.log 2>/dev/null || echo "No service log"
+              exit 1
+            fi
+            
+            if curl -sf http://localhost:9090/health > /dev/null 2>&1; then
+              echo "✓ Orchestrator service is ready"
+              break
+            fi
+            echo "Waiting for orchestrator service... ($i/30)"
+            sleep 2
+          done
+          
+          # Final check
+          if ! curl -sf http://localhost:9090/health > /dev/null 2>&1; then
+            echo "ERROR: Orchestrator service failed to become healthy"
+            echo "--- Stdout/Stderr log ---"
+            cat ./logs/orchestrator-stdout.log 2>/dev/null || echo "No stdout log"
+            echo "--- Service log ---"
+            cat ./logs/orchestrator.log 2>/dev/null || echo "No service log"
+            exit 1
+          fi
         env:
           GITHUB_SERVICE_URL: http://localhost:9081
           DOCUMENT_PROCESSOR_URL: http://localhost:9082
@@ -323,20 +362,64 @@ jobs:
             exit 1
           fi
 
+      - name: Pre-sync diagnostics
+        run: |
+          echo "=== Pre-sync System Diagnostics ==="
+          echo "Memory usage:"
+          free -m
+          echo ""
+          echo "Running service processes:"
+          ps aux | grep -E "(orchestrator|metadata|github-discovery|document-processor|embedding|vector-storage|notification)" | grep -v grep || echo "No service processes found"
+          echo ""
+          echo "Disk usage:"
+          df -h .
+          echo ""
+          echo "Service PIDs:"
+          for pidfile in ./*.pid; do
+            if [ -f "$pidfile" ]; then
+              name=$(basename "$pidfile" .pid)
+              pid=$(cat "$pidfile")
+              if kill -0 $pid 2>/dev/null; then
+                echo "  $name: PID $pid (running)"
+              else
+                echo "  $name: PID $pid (NOT running)"
+              fi
+            fi
+          done
+          echo "=== End Diagnostics ==="
+
       - name: Trigger sync
         timeout-minutes: 20
         run: |
+          # Trap SIGTERM to provide diagnostics
+          trap 'echo "SIGTERM received! Dumping diagnostics..."; echo "Running processes:"; ps aux | head -20; echo "Memory usage:"; free -m; echo "Service PIDs:"; cat ./*.pid 2>/dev/null || true; exit 143' SIGTERM
+          
           INCREMENTAL="${{ github.event.inputs.incremental || 'true' }}"
           PROJECT_ID="${{ github.event.inputs.project_id || 'default' }}"
           
           echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID)"
+          echo "Current memory usage:"
+          free -m || true
           
           # Verify orchestrator is still running before making request
+          echo "Checking orchestrator health..."
           if ! curl -sf http://localhost:9090/health > /dev/null 2>&1; then
             echo "Error: Orchestrator service is not responding"
+            echo "Checking if orchestrator process exists..."
+            if [ -f ./orchestrator.pid ]; then
+              ORCH_PID=$(cat ./orchestrator.pid)
+              if kill -0 $ORCH_PID 2>/dev/null; then
+                echo "Orchestrator process $ORCH_PID is running but not responding to health check"
+                echo "--- Orchestrator stdout log ---"
+                tail -30 ./logs/orchestrator-stdout.log 2>/dev/null || echo "No stdout log"
+              else
+                echo "Orchestrator process $ORCH_PID has died"
+              fi
+            fi
             echo '{"success": false, "errors": ["Orchestrator service is not responding before sync"]}' > sync-result.json
             exit 1
           fi
+          echo "Orchestrator is healthy, proceeding with sync..."
           
           # Make the sync request with extended timeout for large operations
           # --max-time 900 = 15 minutes, --connect-timeout 30 = 30 seconds for connection
