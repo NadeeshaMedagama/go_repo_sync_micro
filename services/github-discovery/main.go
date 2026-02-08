@@ -198,18 +198,28 @@ func (s *GitHubService) GetLatestCommitSHA(ctx context.Context, owner, repo, bra
 
 // HTTP Handlers
 func (s *GitHubService) handleHealth(w http.ResponseWriter, r *http.Request) {
+	// Simple liveness check - verify service is running
+	// Don't make GitHub API calls in health check to avoid rate limiting
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+}
+
+// handleReadiness provides a deeper health check that verifies GitHub API connectivity
+func (s *GitHubService) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	// Test GitHub API connection
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
 	_, _, err := s.client.Users.Get(ctx, "")
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "unhealthy", "error": err.Error()})
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 }
 
 func (s *GitHubService) handleRepositories(w http.ResponseWriter, r *http.Request) {
@@ -316,6 +326,7 @@ func main() {
 	// Setup HTTP server
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", service.handleHealth)
+	mux.HandleFunc("/ready", service.handleReadiness)
 	mux.HandleFunc("/repositories", service.handleRepositories)
 	mux.HandleFunc("/changes", service.handleChanges)
 
