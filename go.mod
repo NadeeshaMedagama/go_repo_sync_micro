@@ -7,10 +7,11 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.1
 	github.com/google/go-github/v57 v57.0.0
 	github.com/joho/godotenv v1.5.1
-	github.com/mattn/go-sqlite3 v1.14.19
+	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/pinecone-io/go-pinecone v1.1.0
 	github.com/slack-go/slack v0.12.3
 	golang.org/x/oauth2 v0.20.0
+	google.golang.org/protobuf v1.34.1
 )
 
 require (
@@ -29,6 +30,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
 	google.golang.org/grpc v1.65.0 // indirect
-	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
