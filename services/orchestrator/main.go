@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -45,14 +47,14 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 }
 
 // SyncProject synchronizes a single project
-func (o *Orchestrator) SyncProject(ctx context.Context, projectID string, incremental bool) (*models.SyncResult, error) {
+func (o *Orchestrator) SyncProject(ctx context.Context, projectID string, incremental bool, maxRepos, maxFilesPerRepo int) (*models.SyncResult, error) {
 	result := &models.SyncResult{
 		ProjectID: projectID,
 		StartTime: time.Now(),
 		Success:   false,
 	}
 
-	logger.Info("Starting sync for project: %s (incremental: %v)", projectID, incremental)
+	logger.Info("Starting sync for project: %s (incremental: %v, maxRepos: %d, maxFilesPerRepo: %d)", projectID, incremental, maxRepos, maxFilesPerRepo)
 
 	// Step 1: Discover repositories from GitHub
 	repos, err := o.discoverRepositories(ctx)
@@ -61,6 +63,13 @@ func (o *Orchestrator) SyncProject(ctx context.Context, projectID string, increm
 		o.sendNotification(ctx, result, "error")
 		return result, err
 	}
+
+	// Apply maxRepos limit
+	if maxRepos > 0 && len(repos) > maxRepos {
+		logger.Info("Limiting repositories from %d to %d", len(repos), maxRepos)
+		repos = repos[:maxRepos]
+	}
+
 	result.RepositoriesScanned = len(repos)
 	logger.Info("Discovered %d repositories", len(repos))
 
@@ -80,7 +89,16 @@ func (o *Orchestrator) SyncProject(ctx context.Context, projectID string, increm
 			continue
 		}
 
+		// Apply maxFilesPerRepo limit
+		if maxFilesPerRepo > 0 && len(changedFiles) > maxFilesPerRepo {
+			logger.Info("Limiting files for %s from %d to %d", repo.FullName, len(changedFiles), maxFilesPerRepo)
+			changedFiles = changedFiles[:maxFilesPerRepo]
+		}
+
 		allChangedFiles = append(allChangedFiles, changedFiles...)
+
+		// Force GC after each repo to manage memory
+		runtime.GC()
 	}
 
 	result.FilesDiscovered = len(allChangedFiles)
@@ -270,6 +288,14 @@ func (o *Orchestrator) processFiles(ctx context.Context, files []*models.FileCha
 
 		allEmbeddings = append(allEmbeddings, embeddings...)
 		totalChunks += chunks
+
+		// Force GC after each batch to manage memory
+		runtime.GC()
+
+		// Log progress every few batches
+		if (i/batchSize)%5 == 0 {
+			logger.Info("Processed %d/%d files (%d embeddings so far)", end, len(files), len(allEmbeddings))
+		}
 	}
 
 	return allEmbeddings, totalChunks, nil
@@ -496,7 +522,22 @@ func (o *Orchestrator) handleSync(w http.ResponseWriter, r *http.Request) {
 
 	incremental := r.URL.Query().Get("incremental") == "true"
 
-	result, err := o.SyncProject(r.Context(), projectID, incremental)
+	// Parse optional limit parameters
+	maxRepos := 0
+	if maxReposStr := r.URL.Query().Get("max_repos"); maxReposStr != "" {
+		if val, err := strconv.Atoi(maxReposStr); err == nil && val > 0 {
+			maxRepos = val
+		}
+	}
+
+	maxFilesPerRepo := 0
+	if maxFilesStr := r.URL.Query().Get("max_files_per_repo"); maxFilesStr != "" {
+		if val, err := strconv.Atoi(maxFilesStr); err == nil && val > 0 {
+			maxFilesPerRepo = val
+		}
+	}
+
+	result, err := o.SyncProject(r.Context(), projectID, incremental, maxRepos, maxFilesPerRepo)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
