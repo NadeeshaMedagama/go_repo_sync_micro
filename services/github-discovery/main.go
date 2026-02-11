@@ -224,7 +224,9 @@ func (s *GitHubService) handleReadiness(w http.ResponseWriter, r *http.Request) 
 
 func (s *GitHubService) handleRepositories(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
 		return
 	}
 
@@ -232,14 +234,18 @@ func (s *GitHubService) handleRepositories(w http.ResponseWriter, r *http.Reques
 	keyword := r.URL.Query().Get("keyword")
 
 	if org == "" {
-		http.Error(w, "org parameter is required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "org parameter is required"})
 		return
 	}
 
 	repos, err := s.ListRepositories(r.Context(), org, keyword)
 	if err != nil {
 		logger.Error("Failed to list repositories: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
@@ -249,7 +255,9 @@ func (s *GitHubService) handleRepositories(w http.ResponseWriter, r *http.Reques
 
 func (s *GitHubService) handleChanges(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
 		return
 	}
 
@@ -257,14 +265,18 @@ func (s *GitHubService) handleChanges(w http.ResponseWriter, r *http.Request) {
 	lastCommit := r.URL.Query().Get("last_commit")
 
 	if repoFullName == "" {
-		http.Error(w, "repo parameter is required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "repo parameter is required"})
 		return
 	}
 
 	// Parse repo full name (owner/name)
 	parts := strings.Split(repoFullName, "/")
 	if len(parts) != 2 {
-		http.Error(w, "invalid repo format, expected owner/name", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid repo format, expected owner/name"})
 		return
 	}
 
@@ -273,7 +285,9 @@ func (s *GitHubService) handleChanges(w http.ResponseWriter, r *http.Request) {
 	ghRepo, _, err := s.client.Repositories.Get(ctx, parts[0], parts[1])
 	if err != nil {
 		logger.Error("Failed to get repository: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
@@ -290,7 +304,9 @@ func (s *GitHubService) handleChanges(w http.ResponseWriter, r *http.Request) {
 	changes, err := s.GetChangedFiles(ctx, repo, lastCommit)
 	if err != nil {
 		logger.Error("Failed to get changed files: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
