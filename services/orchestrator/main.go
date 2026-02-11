@@ -145,13 +145,33 @@ func (o *Orchestrator) discoverRepositories(ctx context.Context) ([]*models.Repo
 
 	resp, err := o.httpClient.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to GitHub service: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Check for non-200 status codes
+	if resp.StatusCode != http.StatusOK {
+		// Try to parse error response
+		var errorResp struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != "" {
+			return nil, fmt.Errorf("GitHub service error (status %d): %s", resp.StatusCode, errorResp.Error)
+		}
+		return nil, fmt.Errorf("GitHub service returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	var repos []*models.Repository
-	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &repos); err != nil {
+		// Log the raw response for debugging
+		logger.Error("Failed to parse repositories response: %v, raw response: %s", err, string(body))
+		return nil, fmt.Errorf("failed to parse repositories response: %w", err)
 	}
 
 	return repos, nil
@@ -163,13 +183,32 @@ func (o *Orchestrator) getChangedFiles(ctx context.Context, repo *models.Reposit
 
 	resp, err := o.httpClient.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to GitHub service: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Check for non-200 status codes
+	if resp.StatusCode != http.StatusOK {
+		// Try to parse error response
+		var errorResp struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &errorResp) == nil && errorResp.Error != "" {
+			return nil, fmt.Errorf("GitHub service error (status %d): %s", resp.StatusCode, errorResp.Error)
+		}
+		return nil, fmt.Errorf("GitHub service returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	var files []*models.FileChange
-	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &files); err != nil {
+		logger.Error("Failed to parse changes response: %v, raw response: %s", err, string(body))
+		return nil, fmt.Errorf("failed to parse changes response: %w", err)
 	}
 
 	return files, nil
