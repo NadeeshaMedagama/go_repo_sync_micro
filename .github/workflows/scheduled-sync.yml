@@ -17,20 +17,25 @@ on:
         default: 'default'
         type: string
       max_duration:
-        description: 'Maximum sync duration in minutes (default: 40)'
+        description: 'Maximum sync duration in minutes (default: 90)'
         required: false
-        default: '40'
+        default: '90'
         type: string
       debug_mode:
         description: 'Enable verbose debug logging'
         required: false
         default: false
         type: boolean
+      repo_filter:
+        description: 'Filter repositories by name pattern (optional, e.g., "api-*")'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     # Prevent concurrent runs from interfering
     concurrency:
       group: sync-${{ github.ref }}
@@ -306,6 +311,10 @@ jobs:
           LOG_LEVEL: INFO
           LOG_FILE_PATH: ./logs/orchestrator.log
           ORCHESTRATOR_PORT: 9090
+          # Processing limits to prevent resource exhaustion
+          MAX_WORKERS: 3
+          EMBEDDING_BATCH_SIZE: 50
+          RATE_LIMIT_REQUESTS_PER_MINUTE: 30
 
       - name: Wait for services to be healthy
         run: |
@@ -399,13 +408,13 @@ jobs:
           echo "=== End Diagnostics ==="
 
       - name: Trigger sync
-        timeout-minutes: 45
+        timeout-minutes: 100
         run: |
           # Function to dump diagnostics
           dump_diagnostics() {
             echo "=== Diagnostic Information ==="
             echo "Running processes:"
-            ps aux | head -30
+            ps aux | grep -E "(orchestrator|metadata|github-discovery|document-processor|embedding|vector-storage|notification)" | grep -v grep || echo "No service processes found"
             echo ""
             echo "Memory usage:"
             free -m
@@ -418,14 +427,31 @@ jobs:
                 if kill -0 $pid 2>/dev/null; then
                   echo "  $name: PID $pid (running)"
                 else
-                  echo "  $name: PID $pid (NOT running)"
+                  echo "  $name: PID $pid (NOT running - CRASHED)"
                 fi
               fi
             done
             echo ""
-            echo "Recent orchestrator logs:"
-            tail -30 ./logs/orchestrator.log 2>/dev/null || echo "No orchestrator logs"
+            echo "Recent orchestrator logs (last 50 lines):"
+            tail -50 ./logs/orchestrator.log 2>/dev/null || echo "No orchestrator logs"
+            echo ""
+            echo "Recent orchestrator stdout (last 30 lines):"
+            tail -30 ./logs/orchestrator-stdout.log 2>/dev/null || echo "No stdout log"
             echo "=== End Diagnostics ==="
+          }
+          
+          # Function to check if critical services are running
+          check_services() {
+            local all_running=true
+            for svc in orchestrator:9090 github-discovery:9081; do
+              name="${svc%:*}"
+              port="${svc#*:}"
+              if ! curl -sf "http://localhost:$port/health" > /dev/null 2>&1; then
+                echo "[ERROR] Service $name is not responding!"
+                all_running=false
+              fi
+            done
+            $all_running
           }
           
           # Trap SIGTERM for graceful shutdown
@@ -454,57 +480,95 @@ jobs:
           
           INCREMENTAL="${{ github.event.inputs.incremental || 'true' }}"
           PROJECT_ID="${{ github.event.inputs.project_id || 'default' }}"
-          MAX_DURATION="${{ github.event.inputs.max_duration || '40' }}"
+          MAX_DURATION="${{ github.event.inputs.max_duration || '90' }}"
           DEBUG_MODE="${{ github.event.inputs.debug_mode || 'false' }}"
+          REPO_FILTER="${{ github.event.inputs.repo_filter || '' }}"
           
           # Convert minutes to seconds for curl
           MAX_SECONDS=$((MAX_DURATION * 60))
           
-          echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID, max_duration: ${MAX_DURATION}m)"
+          echo "=========================================="
+          echo "Starting sync with parameters:"
+          echo "  - Incremental: $INCREMENTAL"
+          echo "  - Project ID: $PROJECT_ID"
+          echo "  - Max duration: ${MAX_DURATION}m (${MAX_SECONDS}s)"
+          echo "  - Debug mode: $DEBUG_MODE"
+          echo "  - Repo filter: ${REPO_FILTER:-'(none)'}"
+          echo "  - Start time: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "=========================================="
+          
           if [ "$DEBUG_MODE" = "true" ]; then
             echo "Debug mode enabled - verbose logging active"
           fi
           echo "Current memory usage:"
           free -m || true
           
-          # Verify orchestrator is still running before making request
-          echo "Checking orchestrator health..."
-          if ! curl -sf http://localhost:9090/health > /dev/null 2>&1; then
-            echo "Error: Orchestrator service is not responding"
-            echo "Checking if orchestrator process exists..."
-            if [ -f ./orchestrator.pid ]; then
-              ORCH_PID=$(cat ./orchestrator.pid)
-              if kill -0 $ORCH_PID 2>/dev/null; then
-                echo "Orchestrator process $ORCH_PID is running but not responding to health check"
-                echo "--- Orchestrator stdout log ---"
-                tail -30 ./logs/orchestrator-stdout.log 2>/dev/null || echo "No stdout log"
-              else
-                echo "Orchestrator process $ORCH_PID has died"
-              fi
-            fi
-            echo '{"success": false, "errors": ["Orchestrator service is not responding before sync"]}' > sync-result.json
+          # Verify all services are running before making request
+          echo ""
+          echo "Verifying all services are healthy before sync..."
+          if ! check_services; then
+            echo "Error: Not all services are responding"
+            dump_diagnostics
+            echo '{"success": false, "errors": ["One or more services are not responding before sync"]}' > sync-result.json
             exit 1
           fi
-          echo "Orchestrator is healthy, proceeding with sync..."
+          echo "All critical services are healthy, proceeding with sync..."
           
-          # Start background memory monitor
+          # Start background memory and health monitor
           (
+            iteration=0
             while true; do
+              iteration=$((iteration + 1))
               MEM_USED=$(free -m | awk '/^Mem:/{print $3}')
               MEM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
               MEM_PCT=$((MEM_USED * 100 / MEM_TOTAL))
+              
+              # Check memory usage
               if [ $MEM_PCT -gt 85 ]; then
-                echo "WARNING: High memory usage detected: ${MEM_USED}MB / ${MEM_TOTAL}MB (${MEM_PCT}%)"
+                echo "[Monitor $(date '+%H:%M:%S')] WARNING: High memory usage: ${MEM_USED}MB / ${MEM_TOTAL}MB (${MEM_PCT}%)"
               fi
+              
+              # Check service health every 2 minutes (4 iterations * 30s)
+              if [ $((iteration % 4)) -eq 0 ]; then
+                echo "[Monitor $(date '+%H:%M:%S')] Periodic health check..."
+                services_ok=true
+                for svc in orchestrator:9090 github-discovery:9081 embedding:9083 vector-storage:9084; do
+                  name="${svc%:*}"
+                  port="${svc#*:}"
+                  if curl -sf "http://localhost:$port/health" > /dev/null 2>&1; then
+                    echo "[Monitor]   ✓ $name: healthy"
+                  else
+                    echo "[Monitor]   ✗ $name: UNHEALTHY!"
+                    services_ok=false
+                  fi
+                done
+                
+                if [ "$services_ok" = "false" ]; then
+                  echo "[Monitor] WARNING: One or more services have crashed!"
+                  echo "[Monitor] Dumping service logs..."
+                  tail -20 ./logs/orchestrator.log 2>/dev/null || true
+                fi
+              fi
+              
               sleep 30
             done
           ) &
           MONITOR_PID=$!
           
+          # Build the sync URL with optional repo_filter
+          SYNC_URL="http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL"
+          if [ -n "$REPO_FILTER" ]; then
+            SYNC_URL="${SYNC_URL}&repo_filter=$(echo "$REPO_FILTER" | jq -sRr @uri)"
+          fi
+          
           # Make the sync request with configurable timeout
-          # --max-time uses MAX_SECONDS, --connect-timeout 30 = 30 seconds for connection
+          echo ""
           echo "Starting sync request with ${MAX_DURATION} minute timeout..."
-          HTTP_CODE=$(curl -s -X POST "http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
+          echo "Sync URL: $SYNC_URL"
+          echo "Request started at: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo ""
+          
+          HTTP_CODE=$(curl -s -X POST "$SYNC_URL" \
             -H "Content-Type: application/json" \
             --connect-timeout 30 \
             --max-time $MAX_SECONDS \
@@ -515,13 +579,20 @@ jobs:
           kill $MONITOR_PID 2>/dev/null || true
           
           CURL_EXIT_CODE=${CURL_EXIT_CODE:-0}
+          echo ""
+          echo "=========================================="
+          echo "Sync request completed at: $(date '+%Y-%m-%d %H:%M:%S')"
           echo "Curl exit code: $CURL_EXIT_CODE"
           echo "HTTP Status: $HTTP_CODE"
+          echo "=========================================="
+          echo ""
           echo "Final memory usage:"
           free -m || true
           
           # Check service health after sync attempt
+          echo ""
           echo "Checking services health after sync..."
+          crashed_services=""
           for service in metadata:9086 github-discovery:9081 document-processor:9082 embedding:9083 vector-storage:9084 notification:9085 orchestrator:9090; do
             name="${service%:*}"
             port="${service#*:}"
@@ -529,19 +600,36 @@ jobs:
               echo "  ✓ $name is still running"
             else
               echo "  ✗ $name has crashed or is unresponsive"
+              crashed_services="$crashed_services $name"
+              # Show crash logs
+              echo "    --- $name stdout log (last 20 lines) ---"
+              tail -20 ./logs/${name}-stdout.log 2>/dev/null || echo "    No stdout log available"
             fi
           done
+          
+          # If services crashed, dump more diagnostics
+          if [ -n "$crashed_services" ]; then
+            echo ""
+            echo "WARNING: The following services crashed during sync:$crashed_services"
+            echo ""
+            echo "=== Detailed Crash Analysis ==="
+            dump_diagnostics
+          fi
           
           # Handle curl-specific exit codes
           if [ $CURL_EXIT_CODE -eq 28 ]; then
             echo "Error: Sync operation timed out after $MAX_DURATION minutes"
-            echo "{\"success\": false, \"errors\": [\"Sync operation timed out after ${MAX_DURATION} minutes - consider running with smaller scope or check service logs\"]}" > sync-result.json
+            echo "{\"success\": false, \"errors\": [\"Sync operation timed out after ${MAX_DURATION} minutes - consider using repo_filter to reduce scope\"]}" > sync-result.json
           elif [ $CURL_EXIT_CODE -eq 7 ]; then
             echo "Error: Failed to connect to orchestrator service"
-            echo '{"success": false, "errors": ["Connection refused - orchestrator service may have crashed"]}' > sync-result.json
+            if [ -n "$crashed_services" ]; then
+              echo "{\"success\": false, \"errors\": [\"Connection refused - services crashed during sync: $crashed_services\"]}" > sync-result.json
+            else
+              echo '{"success": false, "errors": ["Connection refused - orchestrator service may have crashed"]}' > sync-result.json
+            fi
           elif [ $CURL_EXIT_CODE -eq 56 ]; then
             echo "Error: Connection reset by peer - service may have crashed during sync"
-            echo '{"success": false, "errors": ["Connection reset - a service may have crashed during sync"]}' > sync-result.json
+            echo "{\"success\": false, \"errors\": [\"Connection reset - services that crashed: $crashed_services\"]}" > sync-result.json
           elif [ ! -s sync-result.json ]; then
             echo "Error: No response received from sync endpoint"
             echo '{"success": false, "errors": ["No response from orchestrator"]}' > sync-result.json
