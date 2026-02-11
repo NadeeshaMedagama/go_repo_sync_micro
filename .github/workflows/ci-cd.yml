@@ -141,7 +141,7 @@ jobs:
 
       - name: Build and push orchestrator
         if: steps.docker-creds.outputs.has_creds == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./services/orchestrator/Dockerfile
@@ -152,7 +152,7 @@ jobs:
 
       - name: Build and push metadata
         if: steps.docker-creds.outputs.has_creds == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./services/metadata/Dockerfile
@@ -163,7 +163,7 @@ jobs:
 
       - name: Build and push github-discovery
         if: steps.docker-creds.outputs.has_creds == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./services/github-discovery/Dockerfile
@@ -174,7 +174,7 @@ jobs:
 
       - name: Build and push document-processor
         if: steps.docker-creds.outputs.has_creds == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./services/document-processor/Dockerfile
@@ -185,7 +185,7 @@ jobs:
 
       - name: Build and push embedding
         if: steps.docker-creds.outputs.has_creds == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./services/embedding/Dockerfile
@@ -196,7 +196,7 @@ jobs:
 
       - name: Build and push vector-storage
         if: steps.docker-creds.outputs.has_creds == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./services/vector-storage/Dockerfile
@@ -207,7 +207,7 @@ jobs:
 
       - name: Build and push notification
         if: steps.docker-creds.outputs.has_creds == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./services/notification/Dockerfile
