@@ -31,6 +31,16 @@ on:
         required: false
         default: ''
         type: string
+      max_repos:
+        description: 'Maximum number of repositories to process (0 = unlimited)'
+        required: false
+        default: '50'
+        type: string
+      max_files_per_repo:
+        description: 'Maximum files to process per repository (0 = unlimited)'
+        required: false
+        default: '100'
+        type: string
 
 jobs:
   sync:
@@ -312,9 +322,15 @@ jobs:
           LOG_FILE_PATH: ./logs/orchestrator.log
           ORCHESTRATOR_PORT: 9090
           # Processing limits to prevent resource exhaustion
-          MAX_WORKERS: 3
-          EMBEDDING_BATCH_SIZE: 50
-          RATE_LIMIT_REQUESTS_PER_MINUTE: 30
+          MAX_WORKERS: 2
+          EMBEDDING_BATCH_SIZE: 25
+          RATE_LIMIT_REQUESTS_PER_MINUTE: 20
+          # Memory-aware limits
+          MAX_REPOS: ${{ github.event.inputs.max_repos || '50' }}
+          MAX_FILES_PER_REPO: ${{ github.event.inputs.max_files_per_repo || '100' }}
+          # Go garbage collection tuning
+          GOGC: 50
+          GOMEMLIMIT: 12GiB
 
       - name: Wait for services to be healthy
         run: |
@@ -483,6 +499,8 @@ jobs:
           MAX_DURATION="${{ github.event.inputs.max_duration || '90' }}"
           DEBUG_MODE="${{ github.event.inputs.debug_mode || 'false' }}"
           REPO_FILTER="${{ github.event.inputs.repo_filter || '' }}"
+          MAX_REPOS="${{ github.event.inputs.max_repos || '50' }}"
+          MAX_FILES_PER_REPO="${{ github.event.inputs.max_files_per_repo || '100' }}"
           
           # Convert minutes to seconds for curl
           MAX_SECONDS=$((MAX_DURATION * 60))
@@ -494,6 +512,8 @@ jobs:
           echo "  - Max duration: ${MAX_DURATION}m (${MAX_SECONDS}s)"
           echo "  - Debug mode: $DEBUG_MODE"
           echo "  - Repo filter: ${REPO_FILTER:-'(none)'}"
+          echo "  - Max repos: $MAX_REPOS"
+          echo "  - Max files per repo: $MAX_FILES_PER_REPO"
           echo "  - Start time: $(date '+%Y-%m-%d %H:%M:%S')"
           echo "=========================================="
           
@@ -517,15 +537,34 @@ jobs:
           # Start background memory and health monitor
           (
             iteration=0
+            high_mem_count=0
             while true; do
               iteration=$((iteration + 1))
               MEM_USED=$(free -m | awk '/^Mem:/{print $3}')
               MEM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
               MEM_PCT=$((MEM_USED * 100 / MEM_TOTAL))
               
-              # Check memory usage
-              if [ $MEM_PCT -gt 85 ]; then
+              # Check memory usage - warn at 80%, critical at 90%
+              if [ $MEM_PCT -gt 90 ]; then
+                high_mem_count=$((high_mem_count + 1))
+                echo "[Monitor $(date '+%H:%M:%S')] CRITICAL: Memory at ${MEM_PCT}% (${MEM_USED}MB / ${MEM_TOTAL}MB) - count: $high_mem_count"
+                # If memory is critical for 3+ consecutive checks, try to free memory
+                if [ $high_mem_count -ge 3 ]; then
+                  echo "[Monitor] Attempting to trigger Go GC via signal..."
+                  # Force Go services to run GC by sending SIGUSR1 (if they handle it)
+                  for pidfile in ./*.pid; do
+                    if [ -f "$pidfile" ]; then
+                      pid=$(cat "$pidfile")
+                      kill -USR1 $pid 2>/dev/null || true
+                    fi
+                  done
+                  sync; echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+                fi
+              elif [ $MEM_PCT -gt 80 ]; then
                 echo "[Monitor $(date '+%H:%M:%S')] WARNING: High memory usage: ${MEM_USED}MB / ${MEM_TOTAL}MB (${MEM_PCT}%)"
+                high_mem_count=0
+              else
+                high_mem_count=0
               fi
               
               # Check service health every 2 minutes (4 iterations * 30s)
@@ -555,10 +594,16 @@ jobs:
           ) &
           MONITOR_PID=$!
           
-          # Build the sync URL with optional repo_filter
+          # Build the sync URL with optional parameters
           SYNC_URL="http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL"
           if [ -n "$REPO_FILTER" ]; then
             SYNC_URL="${SYNC_URL}&repo_filter=$(echo "$REPO_FILTER" | jq -sRr @uri)"
+          fi
+          if [ "$MAX_REPOS" != "0" ] && [ -n "$MAX_REPOS" ]; then
+            SYNC_URL="${SYNC_URL}&max_repos=$MAX_REPOS"
+          fi
+          if [ "$MAX_FILES_PER_REPO" != "0" ] && [ -n "$MAX_FILES_PER_REPO" ]; then
+            SYNC_URL="${SYNC_URL}&max_files_per_repo=$MAX_FILES_PER_REPO"
           fi
           
           # Make the sync request with configurable timeout
