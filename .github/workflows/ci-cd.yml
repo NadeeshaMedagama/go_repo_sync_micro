@@ -152,7 +152,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/reposync
+          images: ${{ steps.docker-creds.outputs.registry }}/reposync
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -167,7 +167,7 @@ jobs:
           context: .
           file: ./services/orchestrator/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ secrets.DOCKER_USERNAME }}/reposync-orchestrator:${{ github.sha }}
+          tags: ${{ steps.docker-creds.outputs.registry }}/reposync-orchestrator:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -178,7 +178,7 @@ jobs:
           context: .
           file: ./services/metadata/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ secrets.DOCKER_USERNAME }}/reposync-metadata:${{ github.sha }}
+          tags: ${{ steps.docker-creds.outputs.registry }}/reposync-metadata:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -189,7 +189,7 @@ jobs:
           context: .
           file: ./services/github-discovery/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ secrets.DOCKER_USERNAME }}/reposync-github:${{ github.sha }}
+          tags: ${{ steps.docker-creds.outputs.registry }}/reposync-github:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -200,7 +200,7 @@ jobs:
           context: .
           file: ./services/document-processor/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ secrets.DOCKER_USERNAME }}/reposync-document:${{ github.sha }}
+          tags: ${{ steps.docker-creds.outputs.registry }}/reposync-document:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -211,7 +211,7 @@ jobs:
           context: .
           file: ./services/embedding/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ secrets.DOCKER_USERNAME }}/reposync-embedding:${{ github.sha }}
+          tags: ${{ steps.docker-creds.outputs.registry }}/reposync-embedding:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -222,7 +222,7 @@ jobs:
           context: .
           file: ./services/vector-storage/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ secrets.DOCKER_USERNAME }}/reposync-vector:${{ github.sha }}
+          tags: ${{ steps.docker-creds.outputs.registry }}/reposync-vector:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -233,6 +233,6 @@ jobs:
           context: .
           file: ./services/notification/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ secrets.DOCKER_USERNAME }}/reposync-notification:${{ github.sha }}
+          tags: ${{ steps.docker-creds.outputs.registry }}/reposync-notification:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
