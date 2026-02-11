@@ -16,11 +16,21 @@ on:
         required: false
         default: 'default'
         type: string
+      max_duration:
+        description: 'Maximum sync duration in minutes (default: 40)'
+        required: false
+        default: '40'
+        type: string
+      debug_mode:
+        description: 'Enable verbose debug logging'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     # Prevent concurrent runs from interfering
     concurrency:
       group: sync-${{ github.ref }}
@@ -389,15 +399,71 @@ jobs:
           echo "=== End Diagnostics ==="
 
       - name: Trigger sync
-        timeout-minutes: 20
+        timeout-minutes: 45
         run: |
-          # Trap SIGTERM to provide diagnostics
-          trap 'echo "SIGTERM received! Dumping diagnostics..."; echo "Running processes:"; ps aux | head -20; echo "Memory usage:"; free -m; echo "Service PIDs:"; cat ./*.pid 2>/dev/null || true; exit 143' SIGTERM
+          # Function to dump diagnostics
+          dump_diagnostics() {
+            echo "=== Diagnostic Information ==="
+            echo "Running processes:"
+            ps aux | head -30
+            echo ""
+            echo "Memory usage:"
+            free -m
+            echo ""
+            echo "Service PIDs:"
+            for pidfile in ./*.pid; do
+              if [ -f "$pidfile" ]; then
+                name=$(basename "$pidfile" .pid)
+                pid=$(cat "$pidfile")
+                if kill -0 $pid 2>/dev/null; then
+                  echo "  $name: PID $pid (running)"
+                else
+                  echo "  $name: PID $pid (NOT running)"
+                fi
+              fi
+            done
+            echo ""
+            echo "Recent orchestrator logs:"
+            tail -30 ./logs/orchestrator.log 2>/dev/null || echo "No orchestrator logs"
+            echo "=== End Diagnostics ==="
+          }
+          
+          # Trap SIGTERM for graceful shutdown
+          cleanup() {
+            echo ""
+            echo "SIGTERM received! Initiating graceful shutdown..."
+            dump_diagnostics
+            
+            # Try to gracefully stop services
+            echo "Stopping services gracefully..."
+            for pidfile in ./*.pid; do
+              if [ -f "$pidfile" ]; then
+                pid=$(cat "$pidfile")
+                if kill -0 $pid 2>/dev/null; then
+                  kill -TERM $pid 2>/dev/null || true
+                fi
+              fi
+            done
+            
+            # Give services time to shutdown
+            sleep 5
+            
+            exit 143
+          }
+          trap cleanup SIGTERM SIGINT
           
           INCREMENTAL="${{ github.event.inputs.incremental || 'true' }}"
           PROJECT_ID="${{ github.event.inputs.project_id || 'default' }}"
+          MAX_DURATION="${{ github.event.inputs.max_duration || '40' }}"
+          DEBUG_MODE="${{ github.event.inputs.debug_mode || 'false' }}"
           
-          echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID)"
+          # Convert minutes to seconds for curl
+          MAX_SECONDS=$((MAX_DURATION * 60))
+          
+          echo "Starting sync (incremental: $INCREMENTAL, project: $PROJECT_ID, max_duration: ${MAX_DURATION}m)"
+          if [ "$DEBUG_MODE" = "true" ]; then
+            echo "Debug mode enabled - verbose logging active"
+          fi
           echo "Current memory usage:"
           free -m || true
           
@@ -421,18 +487,38 @@ jobs:
           fi
           echo "Orchestrator is healthy, proceeding with sync..."
           
-          # Make the sync request with extended timeout for large operations
-          # --max-time 900 = 15 minutes, --connect-timeout 30 = 30 seconds for connection
+          # Start background memory monitor
+          (
+            while true; do
+              MEM_USED=$(free -m | awk '/^Mem:/{print $3}')
+              MEM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
+              MEM_PCT=$((MEM_USED * 100 / MEM_TOTAL))
+              if [ $MEM_PCT -gt 85 ]; then
+                echo "WARNING: High memory usage detected: ${MEM_USED}MB / ${MEM_TOTAL}MB (${MEM_PCT}%)"
+              fi
+              sleep 30
+            done
+          ) &
+          MONITOR_PID=$!
+          
+          # Make the sync request with configurable timeout
+          # --max-time uses MAX_SECONDS, --connect-timeout 30 = 30 seconds for connection
+          echo "Starting sync request with ${MAX_DURATION} minute timeout..."
           HTTP_CODE=$(curl -s -X POST "http://localhost:9090/sync?project_id=$PROJECT_ID&incremental=$INCREMENTAL" \
             -H "Content-Type: application/json" \
             --connect-timeout 30 \
-            --max-time 900 \
+            --max-time $MAX_SECONDS \
             -o sync-result.json \
             -w "%{http_code}") || CURL_EXIT_CODE=$?
+          
+          # Stop memory monitor
+          kill $MONITOR_PID 2>/dev/null || true
           
           CURL_EXIT_CODE=${CURL_EXIT_CODE:-0}
           echo "Curl exit code: $CURL_EXIT_CODE"
           echo "HTTP Status: $HTTP_CODE"
+          echo "Final memory usage:"
+          free -m || true
           
           # Check service health after sync attempt
           echo "Checking services health after sync..."
@@ -448,8 +534,8 @@ jobs:
           
           # Handle curl-specific exit codes
           if [ $CURL_EXIT_CODE -eq 28 ]; then
-            echo "Error: Sync operation timed out after 15 minutes"
-            echo '{"success": false, "errors": ["Sync operation timed out - consider running with smaller scope or check service logs"]}' > sync-result.json
+            echo "Error: Sync operation timed out after $MAX_DURATION minutes"
+            echo "{\"success\": false, \"errors\": [\"Sync operation timed out after ${MAX_DURATION} minutes - consider running with smaller scope or check service logs\"]}" > sync-result.json
           elif [ $CURL_EXIT_CODE -eq 7 ]; then
             echo "Error: Failed to connect to orchestrator service"
             echo '{"success": false, "errors": ["Connection refused - orchestrator service may have crashed"]}' > sync-result.json
