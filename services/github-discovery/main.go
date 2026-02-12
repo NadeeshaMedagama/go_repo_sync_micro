@@ -347,8 +347,11 @@ func main() {
 	mux.HandleFunc("/changes", service.handleChanges)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Services.GitHubServicePort),
-		Handler: mux,
+		Addr:         fmt.Sprintf(":%d", cfg.Services.GitHubServicePort),
+		Handler:      mux,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 30 * time.Minute, // Long timeout for repository discovery
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
