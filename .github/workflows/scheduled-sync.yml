@@ -17,9 +17,9 @@ on:
         default: 'default'
         type: string
       max_duration:
-        description: 'Maximum sync duration in minutes (default: 90)'
+        description: 'Maximum sync duration in minutes (default: 150)'
         required: false
-        default: '90'
+        default: '150'
         type: string
       debug_mode:
         description: 'Enable verbose debug logging'
@@ -45,7 +45,7 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     # Prevent concurrent runs from interfering
     concurrency:
       group: sync-${{ github.ref }}
@@ -424,7 +424,7 @@ jobs:
           echo "=== End Diagnostics ==="
 
       - name: Trigger sync
-        timeout-minutes: 100
+        timeout-minutes: 160
         run: |
           # Function to dump diagnostics
           dump_diagnostics() {
@@ -496,7 +496,7 @@ jobs:
           
           INCREMENTAL="${{ github.event.inputs.incremental || 'true' }}"
           PROJECT_ID="${{ github.event.inputs.project_id || 'default' }}"
-          MAX_DURATION="${{ github.event.inputs.max_duration || '90' }}"
+          MAX_DURATION="${{ github.event.inputs.max_duration || '150' }}"
           DEBUG_MODE="${{ github.event.inputs.debug_mode || 'false' }}"
           REPO_FILTER="${{ github.event.inputs.repo_filter || '' }}"
           MAX_REPOS="${{ github.event.inputs.max_repos || '50' }}"
