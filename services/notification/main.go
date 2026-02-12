@@ -201,8 +201,11 @@ func main() {
 	mux.HandleFunc("/notify", service.handleNotify)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Services.NotificationServicePort),
-		Handler: mux,
+		Addr:         fmt.Sprintf(":%d", cfg.Services.NotificationServicePort),
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
