@@ -306,8 +306,11 @@ func main() {
 	mux.HandleFunc("/health", service.handleHealth)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Services.MetadataServicePort),
-		Handler: mux,
+		Addr:         fmt.Sprintf(":%d", cfg.Services.MetadataServicePort),
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
