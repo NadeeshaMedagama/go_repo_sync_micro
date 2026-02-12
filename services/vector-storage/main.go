@@ -292,8 +292,11 @@ func main() {
 	mux.HandleFunc("/upsert", service.handleUpsert)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Services.VectorStoragePort),
-		Handler: mux,
+		Addr:         fmt.Sprintf(":%d", cfg.Services.VectorStoragePort),
+		Handler:      mux,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 15 * time.Minute, // Vector upsert can take time for large batches
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
