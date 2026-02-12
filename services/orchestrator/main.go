@@ -41,7 +41,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 		vectorStorageURL:       getServiceURL("VECTOR_STORAGE_URL", "http://localhost:8084"),
 		notificationServiceURL: getServiceURL("NOTIFICATION_SERVICE_URL", "http://localhost:8085"),
 		metadataServiceURL:     getServiceURL("METADATA_SERVICE_URL", "http://localhost:8086"),
-		httpClient:             &http.Client{Timeout: 5 * time.Minute},
+		httpClient:             &http.Client{Timeout: 30 * time.Minute},
 		config:                 cfg,
 	}
 }
@@ -593,8 +593,11 @@ func main() {
 	mux.HandleFunc("/sync", orchestrator.handleSync)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Services.OrchestratorPort),
-		Handler: mux,
+		Addr:         fmt.Sprintf(":%d", cfg.Services.OrchestratorPort),
+		Handler:      mux,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 180 * time.Minute, // Long timeout for sync operations
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
