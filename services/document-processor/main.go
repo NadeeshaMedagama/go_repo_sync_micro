@@ -259,8 +259,11 @@ func main() {
 	mux.HandleFunc("/chunk", service.handleChunk)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Services.DocumentProcessorPort),
-		Handler: mux,
+		Addr:         fmt.Sprintf(":%d", cfg.Services.DocumentProcessorPort),
+		Handler:      mux,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 10 * time.Minute, // Document processing can take time
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
