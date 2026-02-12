@@ -171,8 +171,11 @@ func main() {
 	mux.HandleFunc("/embed", service.handleEmbed)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Services.EmbeddingServicePort),
-		Handler: mux,
+		Addr:         fmt.Sprintf(":%d", cfg.Services.EmbeddingServicePort),
+		Handler:      mux,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 15 * time.Minute, // Embedding can take time for large batches
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Graceful shutdown
