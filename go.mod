@@ -11,7 +11,7 @@ require (
 	github.com/pinecone-io/go-pinecone v1.1.0
 	github.com/slack-go/slack v0.17.3
 	golang.org/x/oauth2 v0.20.0
-	google.golang.org/protobuf v1.34.1
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
