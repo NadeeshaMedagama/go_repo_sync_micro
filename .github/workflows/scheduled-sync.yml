@@ -698,7 +698,7 @@ jobs:
 
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sync-logs-${{ github.run_number }}
           path: logs/
@@ -706,7 +706,7 @@ jobs:
 
       - name: Upload sync result
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sync-result-${{ github.run_number }}
           path: sync-result.json
