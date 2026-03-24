@@ -150,7 +150,7 @@ jobs:
       - name: Extract metadata
         if: steps.docker-creds.outputs.has_creds == 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ steps.docker-creds.outputs.registry }}/reposync
           tags: |
