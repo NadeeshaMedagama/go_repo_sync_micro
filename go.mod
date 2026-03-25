@@ -1,6 +1,6 @@
 module github.com/nadeeshame/Go_RepoSync_Micro
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai v0.9.0
@@ -10,7 +10,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.37
 	github.com/pinecone-io/go-pinecone v1.1.1
 	github.com/slack-go/slack v0.20.0
-	golang.org/x/oauth2 v0.20.0
+	golang.org/x/oauth2 v0.36.0
 	google.golang.org/protobuf v1.36.11
 )
 
