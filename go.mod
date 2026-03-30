@@ -7,7 +7,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.0
 	github.com/google/go-github/v57 v57.0.0
 	github.com/joho/godotenv v1.5.1
-	github.com/mattn/go-sqlite3 v1.14.37
+	github.com/mattn/go-sqlite3 v1.14.38
 	github.com/pinecone-io/go-pinecone v1.1.1
 	github.com/slack-go/slack v0.20.0
 	golang.org/x/oauth2 v0.36.0
