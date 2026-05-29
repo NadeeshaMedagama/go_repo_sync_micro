@@ -9,7 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/pinecone-io/go-pinecone v1.1.1
-	github.com/slack-go/slack v0.23.1
+	github.com/slack-go/slack v0.24.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/protobuf v1.36.11
 )
