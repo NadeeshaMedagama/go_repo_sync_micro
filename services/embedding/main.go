@@ -10,30 +10,29 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/nadeeshame/Go_RepoSync_Micro/pkg/config"
 	"github.com/nadeeshame/Go_RepoSync_Micro/pkg/errors"
 	"github.com/nadeeshame/Go_RepoSync_Micro/pkg/logger"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/azure"
 )
 
 // EmbeddingService implements interfaces.EmbeddingService
 type EmbeddingService struct {
-	client     *azopenai.Client
+	client     *openai.Client
 	deployment string
 	dimension  int
 }
 
 // NewEmbeddingService creates a new embedding service
-func NewEmbeddingService(endpoint, apiKey, deployment string) (*EmbeddingService, error) {
-	keyCredential := azcore.NewKeyCredential(apiKey)
-	client, err := azopenai.NewClientWithKeyCredential(endpoint, keyCredential, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Azure OpenAI client: %w", err)
-	}
+func NewEmbeddingService(endpoint, apiKey, apiVersion, deployment string) (*EmbeddingService, error) {
+	client := openai.NewClient(
+		azure.WithEndpoint(endpoint, apiVersion),
+		azure.WithAPIKey(apiKey),
+	)
 
 	return &EmbeddingService{
-		client:     client,
+		client:     &client,
 		deployment: deployment,
 		dimension:  1536, // text-embedding-ada-002 dimension
 	}, nil
@@ -57,10 +56,12 @@ func (s *EmbeddingService) GenerateBatchEmbeddings(ctx context.Context, texts []
 		return [][]float32{}, nil
 	}
 
-	resp, err := s.client.GetEmbeddings(ctx, azopenai.EmbeddingsOptions{
-		Input:          texts,
-		DeploymentName: &s.deployment,
-	}, nil)
+	resp, err := s.client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Model: openai.EmbeddingModel(s.deployment),
+		Input: openai.EmbeddingNewParamsInputUnion{
+			OfArrayOfStrings: texts,
+		},
+	})
 
 	if err != nil {
 		return nil, errors.External("Azure OpenAI", "failed to generate embeddings", err)
@@ -68,7 +69,10 @@ func (s *EmbeddingService) GenerateBatchEmbeddings(ctx context.Context, texts []
 
 	embeddings := make([][]float32, len(resp.Data))
 	for i, item := range resp.Data {
-		embeddings[i] = item.Embedding
+		embeddings[i] = make([]float32, len(item.Embedding))
+		for j, value := range item.Embedding {
+			embeddings[i][j] = float32(value)
+		}
 	}
 
 	logger.Info("Generated %d embeddings", len(embeddings))
@@ -159,6 +163,7 @@ func main() {
 	service, err := NewEmbeddingService(
 		cfg.AzureOpenAI.Endpoint,
 		cfg.AzureOpenAI.APIKey,
+		cfg.AzureOpenAI.APIVersion,
 		cfg.AzureOpenAI.EmbeddingsDeployment,
 	)
 	if err != nil {
