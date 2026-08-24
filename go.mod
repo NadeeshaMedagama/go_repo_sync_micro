@@ -8,7 +8,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.49
 	github.com/openai/openai-go/v3 v3.52.0
 	github.com/pinecone-io/go-pinecone v1.1.1
-	github.com/slack-go/slack v0.27.0
+	github.com/slack-go/slack v0.29.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/protobuf v1.36.12
 )
