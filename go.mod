@@ -3,11 +3,10 @@ module github.com/nadeeshame/Go_RepoSync_Micro
 go 1.25.0
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai v0.9.0
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0
 	github.com/google/go-github/v57 v57.0.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.49
+	github.com/openai/openai-go/v3 v3.2.0
 	github.com/pinecone-io/go-pinecone v1.1.1
 	github.com/slack-go/slack v0.27.0
 	golang.org/x/oauth2 v0.36.0
@@ -15,6 +14,7 @@ require (
 )
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -22,7 +22,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
-	github.com/openai/openai-go/v3 v3.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
