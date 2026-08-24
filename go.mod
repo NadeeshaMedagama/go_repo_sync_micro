@@ -5,8 +5,8 @@ go 1.25.0
 require (
 	github.com/google/go-github/v57 v57.0.0
 	github.com/joho/godotenv v1.5.1
-	github.com/mattn/go-sqlite3 v1.14.50
-	github.com/openai/openai-go/v3 v3.2.0
+	github.com/mattn/go-sqlite3 v1.14.49
+	github.com/openai/openai-go/v3 v3.52.0
 	github.com/pinecone-io/go-pinecone v1.1.1
 	github.com/slack-go/slack v0.29.0
 	golang.org/x/oauth2 v0.36.0
@@ -24,7 +24,7 @@ require (
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	github.com/tidwall/gjson v1.18.0 // indirect
+	github.com/tidwall/gjson v1.19.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
