@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/google/go-github/v57 v57.0.0
 	github.com/joho/godotenv v1.5.1
-	github.com/mattn/go-sqlite3 v1.14.50
+	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/openai/openai-go/v3 v3.61.0
 	github.com/pinecone-io/go-pinecone v1.1.1
 	github.com/slack-go/slack v0.29.0
